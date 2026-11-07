@@ -112,7 +112,8 @@ export function createVFX(type = 'fire', opts = {}) {
     geo.setDrawRange(0, n);
     for (const a of ['position', 'aColor', 'aSize', 'aAlpha']) geo.attributes[a].needsUpdate = true;
   };
-  frameHooks.add(hook);
+  if (!opts.offline) frameHooks.add(hook);
+  pts.userData.step = hook;
   pts.userData.dispose = () => frameHooks.delete(hook);
   return pts;
 }

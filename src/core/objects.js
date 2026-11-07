@@ -3,7 +3,7 @@ import * as THREE from 'three';
 import { FontLoader } from 'three/addons/loaders/FontLoader.js';
 import { TextGeometry } from 'three/addons/geometries/TextGeometry.js';
 import { RectAreaLightUniformsLib } from 'three/addons/lights/RectAreaLightUniformsLib.js';
-import fontJson from 'three/examples/fonts/helvetiker_bold.typeface.json';
+import fontJson from '../assets/helvetiker_bold.typeface.json';
 import { nextId, bus } from './state.js';
 
 RectAreaLightUniformsLib.init();
@@ -34,7 +34,7 @@ const NAMES = {
   torus: 'Toro', torusknot: 'Nó', plane: 'Plano', capsule: 'Cápsula', ring: 'Anel',
 };
 
-export function makeMaterial(color = '#c9ccd3') {
+export function makeMaterial(color = '#b9bbc0') {
   return new THREE.MeshPhysicalMaterial({ color, roughness: 0.45, metalness: 0.0, side: THREE.FrontSide });
 }
 
@@ -64,7 +64,7 @@ export function createPrimitive(type = 'cube', opts = {}) {
   return finish(mesh, { name: NAMES[type], ...opts }, 'mesh');
 }
 
-export function createText(text = 'Orbe', opts = {}) {
+export function createText(text = 'Argila', opts = {}) {
   const size = opts.size ?? 0.5;
   const tg = new TextGeometry(text, {
     font, size, depth: opts.depth ?? size * 0.25, curveSegments: 8,

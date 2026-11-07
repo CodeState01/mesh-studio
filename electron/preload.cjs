@@ -1,6 +1,6 @@
 const { contextBridge, ipcRenderer } = require('electron');
 
-contextBridge.exposeInMainWorld('orbe', {
+contextBridge.exposeInMainWorld('argila', {
   isDesktop: true,
   settings: {
     get: () => ipcRenderer.invoke('settings:get'),
@@ -10,6 +10,9 @@ contextBridge.exposeInMainWorld('orbe', {
   file: {
     save: (opts) => ipcRenderer.invoke('file:save', opts),
     open: (opts) => ipcRenderer.invoke('file:open', opts),
+    pickDir: (opts) => ipcRenderer.invoke('dir:pick', opts),
+    writeTo: (opts) => ipcRenderer.invoke('file:writeTo', opts),
+    openPath: (p) => ipcRenderer.invoke('shell:openPath', p),
   },
   app: { info: () => ipcRenderer.invoke('app:info') },
   update: {

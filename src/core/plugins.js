@@ -30,7 +30,7 @@ const api = {
 export async function loadPlugins() {
   const mods = import.meta.glob('../plugins/*.js', { eager: true });
   for (const [path, mod] of Object.entries(mods)) {
-    try { await mod.default?.(api); console.info('[orbe] plugin carregado:', path); }
-    catch (e) { console.error('[orbe] falha no plugin', path, e); }
+    try { await mod.default?.(api); console.info('[argila] plugin carregado:', path); }
+    catch (e) { console.error('[argila] falha no plugin', path, e); }
   }
 }

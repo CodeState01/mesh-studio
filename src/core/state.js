@@ -14,7 +14,7 @@ export const state = {
   workspace: 'model',      // model | animate | vfx | texture | video
   shading: 'material',     // wire | solid | material | render
   time: 0, duration: 8, fps: 30, playing: false,
-  env: { background: '#16181c', fog: 0, bloom: 0.35, exposure: 1, sky: 'studio' },
+  env: { background: '#16181c', fog: 0, bloom: 0.12, exposure: 0.85, sky: 'studio' },
 };
 
 export function select(obj) {

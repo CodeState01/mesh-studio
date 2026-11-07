@@ -40,7 +40,7 @@ export function initViewport(el) {
   renderer.setPixelRatio(Math.min(devicePixelRatio, 2));
   renderer.toneMapping = THREE.ACESFilmicToneMapping;
   renderer.shadowMap.enabled = true;
-  renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+  renderer.shadowMap.type = THREE.PCFShadowMap;
   el.appendChild(renderer.domElement);
 
   camera = new THREE.PerspectiveCamera(40, 1, 0.05, 1000);
@@ -92,9 +92,9 @@ export function initViewport(el) {
   composer.addPass(new RenderPass(scene, camera));
   outlinePass = new OutlinePass(new THREE.Vector2(1, 1), scene, camera);
   outlinePass.visibleEdgeColor.set('#ff7a45'); outlinePass.hiddenEdgeColor.set('#5a2a18');
-  outlinePass.edgeStrength = 4; outlinePass.edgeThickness = 1; outlinePass.edgeGlow = 0;
+  outlinePass.edgeStrength = 2.5; outlinePass.edgeThickness = 1; outlinePass.edgeGlow = 0;
   // Bloom ANTES do contorno — senão a borda de seleção também "brilha".
-  bloomPass = new UnrealBloomPass(new THREE.Vector2(1, 1), 0.35, 0.45, 0.92);
+  bloomPass = new UnrealBloomPass(new THREE.Vector2(1, 1), 0.12, 0.35, 1.0);
   composer.addPass(bloomPass);
   composer.addPass(outlinePass);
   composer.addPass(new OutputPass());
@@ -157,7 +157,7 @@ function setupPicking() {
   el.addEventListener('pointerup', (e) => {
     if (!down || e.button !== 0) return;
     const moved = Math.hypot(e.clientX - down.x, e.clientY - down.y) > 4; down = null;
-    if (moved || gizmo.dragging) return;
+    if (moved || gizmo.dragging || state.workspace === 'sculpt') return;
     // Clique no ViewHelper (canto inferior direito)
     const r = el.getBoundingClientRect();
     if (e.clientX > r.right - 128 && e.clientY > r.bottom - 128) { viewHelper.handleClick(e); return; }
@@ -256,3 +256,6 @@ export function worldToScreen(v) {
   const p = v.clone().project(renderCamera || camera);
   return { x: r.left + ((p.x + 1) / 2) * r.width, y: r.top + ((1 - p.y) / 2) * r.height };
 }
+
+export function setGridVisible(on) { const g = helpers.getObjectByName('__grid__'); if (g) g.visible = on; }
+export const getContainer = () => container;

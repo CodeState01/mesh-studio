@@ -1,4 +1,4 @@
-# Orbe Studio
+# Argila Studio
 
 Desktop app (Windows) for **3D modeling, animation, motion design, VFX/SFX, texturing and video editing**. It has a built-in AI assistant that works through **multiple cursors at the same time**, an **MCP server** that external AI clients can connect to, **70 AI providers** (including 19 local runtimes), and **automatic updates**.
 
@@ -25,7 +25,7 @@ npm run dist       # generate the Windows installer in release/
 | **SFX** | 9 synthesized sounds (no files needed) + audio import, synced to the timeline |
 | **Video** | NLE with 3 video tracks + 1 audio track, 3D scene, animated title, color, image and video clips, transitions, cutting, and **WebM export with audio** |
 | **Render** | Bloom, ACES tone mapping, soft shadows, PNG/4K render through the scene camera |
-| **I/O** | Import glTF/GLB/OBJ/FBX/STL, export GLB/glTF/OBJ/STL, versioned `.orbe` projects, autosave |
+| **I/O** | Import glTF/GLB/OBJ/FBX/STL, export GLB/glTF/OBJ/STL, versioned `.argila` projects, autosave |
 | **Editor** | Undo/redo, outliner, scrub fields, command palette (Ctrl+K), DCC-style shortcuts |
 
 ## AI
@@ -35,15 +35,15 @@ npm run dist       # generate the Windows installer in release/
 - **Demo mode** (offline) shows the cursors working without needing an API key.
 - API keys are encrypted with the operating system's `safeStorage`.
 
-## MCP: controlling Orbe from other AI clients
+## MCP: controlling Argila from other AI clients
 
 With the app open:
 
 ```json
-{ "mcpServers": { "orbe": { "command": "node", "args": ["C:/caminho/para/orbe/mcp/server.mjs"] } } }
+{ "mcpServers": { "argila": { "command": "node", "args": ["C:/caminho/para/argila-studio/mcp/server.mjs"] } } }
 ```
 
-For Claude Code: `claude mcp add orbe -- node "C:/caminho/para/orbe/mcp/server.mjs"`.
+For Claude Code: `claude mcp add argila -- node "C:/caminho/para/argila-studio/mcp/server.mjs"`.
 Self-test: `node scripts/mcp-selftest.mjs`.
 
 ## Future updates

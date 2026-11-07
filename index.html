@@ -3,8 +3,8 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <meta http-equiv="Content-Security-Policy" content="default-src 'self' 'unsafe-inline' data: blob:; connect-src *; img-src * data: blob:; media-src * blob: data:" />
-  <title>Orbe Studio</title>
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self' 'unsafe-inline' 'unsafe-eval' data: blob:; connect-src *; img-src * data: blob:; media-src * blob: data:" />
+  <title>Argila Studio</title>
   <link rel="icon" href="/favicon.svg" />
   <link rel="stylesheet" href="/src/styles.css" />
 </head>
@@ -13,50 +13,52 @@
   <div id="app">
     <header id="titlebar">
       <div class="brand" id="brand"></div>
-      <nav class="menus" id="menus"></nav>
-      <div class="workspaces" id="workspaces"></div>
+      <div class="crumb" id="crumb"></div>
+      <button class="search-pill" id="search-pill"></button>
       <div class="status" id="tb-status"></div>
     </header>
 
     <div id="main">
-      <aside id="toolbar"></aside>
+      <nav id="nav"></nav>
 
-      <section id="center">
-        <div id="viewport">
-          <div class="vp-top">
-            <div class="seg" id="mode-seg"></div>
-            <div class="vp-add" id="vp-add"></div>
-            <div class="spacer"></div>
-            <div class="seg" id="shading-seg"></div>
-          </div>
-          <div class="vp-hint" id="vp-hint"></div>
-          <div class="vp-cam-badge" id="cam-badge"></div>
+      <section id="stage">
+        <div id="ws3d">
+          <section id="center">
+            <div id="viewport">
+              <div class="vp-top">
+                <div class="seg" id="mode-seg"></div>
+                <div class="vp-add" id="vp-add"></div>
+                <div class="spacer"></div>
+                <div class="seg" id="shading-seg"></div>
+              </div>
+              <div class="scene-card" id="scene-card">
+                <div class="panel-h"><button class="sc-toggle" id="sc-toggle"><span>Cena</span></button><div class="panel-actions" id="outliner-actions"></div></div>
+                <div id="outliner"></div>
+              </div>
+              <div class="tool-dock" id="tool-dock"></div>
+              <div class="vp-hint" id="vp-hint"></div>
+              <div class="vp-cam-badge" id="cam-badge"></div>
+            </div>
+            <div id="splitter-h" class="splitter h"></div>
+            <div id="bottom">
+              <div class="bt-bar" id="bt-bar"></div>
+              <div id="timeline"></div>
+            </div>
+          </section>
+          <aside id="inspector">
+            <div class="tabs" id="prop-tabs"></div>
+            <div id="props"></div>
+          </aside>
         </div>
-        <div id="splitter-h" class="splitter h"></div>
-        <div id="bottom">
-          <div class="bt-bar" id="bt-bar"></div>
-          <div id="timeline"></div>
-        </div>
+        <div id="page"></div>
       </section>
-
-      <div id="splitter-v" class="splitter v"></div>
-      <aside id="side">
-        <div class="panel" id="outliner-panel">
-          <div class="panel-h"><span>Cena</span><div class="panel-actions" id="outliner-actions"></div></div>
-          <div id="outliner"></div>
-        </div>
-        <div class="panel grow" id="props-panel">
-          <div class="tabs" id="prop-tabs"></div>
-          <div id="props"></div>
-        </div>
-      </aside>
 
       <aside id="ai">
         <div class="panel-h ai-h"><span>Assistente</span><div class="panel-actions" id="ai-actions"></div></div>
         <div class="ai-provider" id="ai-provider"></div>
         <div id="ai-log"></div>
         <form id="ai-form">
-          <textarea id="ai-input" rows="3" placeholder="Descreva o que criar…  (Enter envia, Shift+Enter quebra linha)"></textarea>
+          <textarea id="ai-input" rows="3" placeholder="Descreva o que criar…  (Enter envia)"></textarea>
           <div class="ai-form-bar">
             <span class="ai-cursors-ctl" id="ai-cursors-ctl"></span>
             <button type="submit" class="btn primary" id="ai-send"></button>
@@ -64,8 +66,6 @@
         </form>
       </aside>
     </div>
-
-    <footer id="statusbar"></footer>
   </div>
   <div id="modal-root"></div>
   <script type="module" src="/src/main.js"></script>

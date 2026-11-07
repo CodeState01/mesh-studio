@@ -38,7 +38,8 @@ export function initVideo(viewportEl, timelineContainer) {
     const on = ws === 'video';
     monitor.classList.toggle('on', on);
     // No modo vídeo o viewport renderiza "limpo" (sem grid/gizmo/proxies).
-    helpers.visible = !on; gizmo.getHelper().visible = !on;
+    helpers.visible = !on;
+    gizmo.getHelper().visible = !on && ['move', 'rotate', 'scale'].includes(state.tool);
     content.traverse((o) => { if (o.userData.proxy) o.visible = !on; });
     if (on) { outlinePass.selectedObjects = []; renderTimeline(); drawMonitor(); }
   });
@@ -131,8 +132,8 @@ export function exportVideo() {
   recorder.onstop = async () => {
     const blob = new Blob(chunks, { type: 'video/webm' });
     const buf = new Uint8Array(await blob.arrayBuffer());
-    if (window.orbe?.file) await window.orbe.file.save({ name: 'orbe-video.webm', data: buf, binary: true, filters: [{ name: 'WebM', extensions: ['webm'] }] });
-    else { const a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = 'orbe-video.webm'; a.click(); }
+    if (window.argila?.file) await window.argila.file.save({ name: 'argila-video.webm', data: buf, binary: true, filters: [{ name: 'WebM', extensions: ['webm'] }] });
+    else { const a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = 'argila-video.webm'; a.click(); }
     toast('Vídeo exportado');
   };
   recording = true; video.time = 0; recorder.start(); videoPlay(true);

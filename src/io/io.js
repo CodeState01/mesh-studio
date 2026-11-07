@@ -1,4 +1,4 @@
-// Importação/exportação de modelos e salvamento de projeto (.orbe).
+// Importação/exportação de modelos e salvamento de projeto (.argila).
 // O formato de projeto é versionado; MIGRATIONS converte arquivos antigos
 // quando o app for atualizado — base para "atualizações futuras" sem quebrar projetos.
 import * as THREE from 'three';
@@ -22,13 +22,13 @@ const MIGRATIONS = {
 };
 
 async function save(name, data, filters, binary = false) {
-  if (window.orbe?.file) return window.orbe.file.save({ name, data, filters, binary });
+  if (window.argila?.file) return window.argila.file.save({ name, data, filters, binary });
   const blob = new Blob([data]); const a = document.createElement('a');
   a.href = URL.createObjectURL(blob); a.download = name; a.click(); return name;
 }
 
 async function open(filters, accept) {
-  if (window.orbe?.file) return window.orbe.file.open({ filters });
+  if (window.argila?.file) return window.argila.file.open({ filters });
   return new Promise((res) => {
     const i = document.createElement('input'); i.type = 'file'; i.accept = accept;
     i.onchange = async () => { const f = i.files[0]; if (!f) return res(null); res({ name: f.name, data: new Uint8Array(await f.arrayBuffer()) }); };
@@ -37,22 +37,29 @@ async function open(filters, accept) {
 }
 
 // Clone limpo para exportação: sem proxies/helpers de editor.
-function exportRoot() {
-  const root = content.clone(true);
-  const drop = []; root.traverse((o) => { if (o.userData.proxy || o.userData.editHelper || o.isPoints) drop.push(o); });
-  drop.forEach((o) => o.parent?.remove(o)); root.name = 'Orbe';
+function exportRoot(objects) {
+  const root = new THREE.Group(); root.name = 'Argila';
+  (objects || content.children).forEach((o) => root.add(o.clone(true)));
+  const drop = []; root.traverse((o) => { if (o.userData.proxy || o.userData.editHelper || o.isPoints || o.isLight || o.isCamera) drop.push(o); });
+  drop.forEach((o) => o.parent?.remove(o));
   return root;
 }
 
-export async function exportModel(fmt) {
-  const root = exportRoot();
+// Gera os bytes do modelo sem salvar — usado pela exportação e pelo envio para engines.
+export async function exportData(fmt, objects) {
+  const root = exportRoot(objects);
   if (fmt === 'glb' || fmt === 'gltf') {
     const out = await new GLTFExporter().parseAsync(root, { binary: fmt === 'glb' });
-    return fmt === 'glb' ? save('cena.glb', new Uint8Array(out), [{ name: 'GLB', extensions: ['glb'] }], true)
-      : save('cena.gltf', JSON.stringify(out), [{ name: 'glTF', extensions: ['gltf'] }]);
+    return fmt === 'glb' ? { data: new Uint8Array(out), binary: true } : { data: JSON.stringify(out), binary: false };
   }
-  if (fmt === 'obj') return save('cena.obj', new OBJExporter().parse(root), [{ name: 'OBJ', extensions: ['obj'] }]);
-  if (fmt === 'stl') return save('cena.stl', new STLExporter().parse(root), [{ name: 'STL', extensions: ['stl'] }]);
+  if (fmt === 'obj') return { data: new OBJExporter().parse(root), binary: false };
+  if (fmt === 'stl') return { data: new STLExporter().parse(root), binary: false };
+  throw new Error('Formato desconhecido: ' + fmt);
+}
+
+export async function exportModel(fmt) {
+  const { data, binary } = await exportData(fmt);
+  return save('cena.' + fmt, data, [{ name: fmt.toUpperCase(), extensions: [fmt] }], binary);
 }
 
 export async function importModel() {
@@ -80,17 +87,17 @@ export function serializeProject() {
   const drop = []; root.traverse((o) => { if (o.userData.editHelper) drop.push(o); }); drop.forEach((o) => o.parent.remove(o));
   root.traverse((o) => { delete o.userData.dispose; });
   return {
-    app: 'orbe-studio', version: PROJECT_VERSION, savedAt: new Date().toISOString(),
+    app: 'argila-studio', version: PROJECT_VERSION, savedAt: new Date().toISOString(),
     scene: root.toJSON(), env: state.env, anim: serializeAnim(), video: serializeVideo(),
   };
 }
 
 export async function saveProject() {
-  return save('projeto.orbe', JSON.stringify(serializeProject()), [{ name: 'Projeto Orbe', extensions: ['orbe'] }]);
+  return save('projeto.argila', JSON.stringify(serializeProject()), [{ name: 'Projeto Argila', extensions: ['argila', 'orbe'] }]);
 }
 
 export async function openProject() {
-  const f = await open([{ name: 'Projeto Orbe', extensions: ['orbe'] }], '.orbe');
+  const f = await open([{ name: 'Projeto Argila', extensions: ['argila', 'orbe'] }], '.argila,.orbe');
   if (!f) return; loadProject(JSON.parse(new TextDecoder().decode(f.data)));
 }
 
@@ -98,7 +105,7 @@ export async function loadProject(p) {
   while ((p.version ?? 0) < PROJECT_VERSION) {
     const m = MIGRATIONS[p.version ?? 0]; if (!m) throw new Error(`Sem migração para v${p.version}`); p = m(p);
   }
-  if (p.version > PROJECT_VERSION) throw new Error('Projeto criado numa versão mais nova do Orbe. Atualize o app.');
+  if (p.version > PROJECT_VERSION) throw new Error('Projeto criado numa versão mais nova do Argila. Atualize o app.');
   const root = await new THREE.ObjectLoader().parseAsync(p.scene);
   select(null);
   [...content.children].forEach((c) => { c.userData.dispose?.(); content.remove(c); });
@@ -111,9 +118,9 @@ export async function loadProject(p) {
 
 // Autosave local (recuperação de falhas)
 export function startAutosave() {
-  setInterval(() => { try { localStorage.setItem('orbe:autosave', JSON.stringify(serializeProject())); } catch {} }, 60_000);
+  setInterval(() => { try { localStorage.setItem('argila:autosave', JSON.stringify(serializeProject())); } catch {} }, 60_000);
 }
 export function restoreAutosave() {
-  const raw = localStorage.getItem('orbe:autosave'); if (!raw) return false;
+  const raw = localStorage.getItem('argila:autosave'); if (!raw) return false;
   loadProject(JSON.parse(raw)); return true;
 }

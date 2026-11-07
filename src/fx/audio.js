@@ -90,3 +90,11 @@ export function playBuffer(id, offset = 0, volume = 1) {
   playing.add(s); s.onended = () => playing.delete(s);
 }
 export function stopAllBuffers() { playing.forEach((s) => { try { s.stop(); } catch {} }); playing.clear(); }
+
+// Renderiza um SFX "offline" (sem tocar) — usado para desenhar a forma de onda na Loja.
+export async function renderSFX(preset, sec = 2) {
+  const sr = 22050; const c = new OfflineAudioContext(1, sr * sec, sr);
+  const g = c.createGain(); g.connect(c.destination);
+  (RECIPES[preset] || RECIPES.click)(c, g, 0.02);
+  return (await c.startRendering()).getChannelData(0);
+}

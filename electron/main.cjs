@@ -1,4 +1,4 @@
-// Orbe Studio — processo principal do Electron
+// Argila Studio — processo principal do Electron
 // Responsável por: janela, ponte MCP (WebSocket), proxy de IA (sem CORS),
 // armazenamento seguro de chaves, diálogos de arquivo e auto-update.
 const { app, BrowserWindow, ipcMain, dialog, safeStorage, shell } = require('electron');
@@ -7,7 +7,14 @@ const fs = require('node:fs');
 const { startBridge } = require('./bridge.cjs');
 const { setupUpdater } = require('./updater.cjs');
 
-const isDev = !!process.env.ORBE_DEV;
+const isDev = !!process.env.ARGILA_DEV;
+// No modo de teste a janela pode estar "oculta" (sessão bloqueada/RDP): sem isso o
+// Chromium pausa a renderização e as capturas saem vazias.
+if (process.env.ARGILA_SMOKE) {
+  app.commandLine.appendSwitch('disable-features', 'CalculateNativeWinOcclusion');
+  app.commandLine.appendSwitch('disable-renderer-backgrounding');
+  app.commandLine.appendSwitch('disable-background-timer-throttling');
+}
 let win;
 
 // ---------- Armazenamento de configurações (chaves criptografadas) ----------
@@ -45,19 +52,20 @@ function createWindow() {
       preload: path.join(__dirname, 'preload.cjs'),
       contextIsolation: true,
       nodeIntegration: false,
+      backgroundThrottling: !process.env.ARGILA_SMOKE,
     },
   });
-  // Smoke test automatizado (CI / verificação): ORBE_SMOKE=caminho.png
-  if (process.env.ORBE_SMOKE) {
+  // Smoke test automatizado (CI / verificação): ARGILA_SMOKE=caminho.png
+  if (process.env.ARGILA_SMOKE) {
     win.webContents.on('console-message', (_e, level, msg) => { if (level >= 2) console.log('[renderer]', msg); });
     win.webContents.on('did-finish-load', async () => {
-      const js = process.env.ORBE_SMOKE_JS || '';
+      const js = process.env.ARGILA_SMOKE_JS || '';
       if (js) await new Promise((r) => setTimeout(r, 1200)).then(() => win.webContents.executeJavaScript(js).catch((e) => console.log('[smoke js]', e.message)));
       setTimeout(async () => {
         const img = await win.webContents.capturePage();
-        fs.writeFileSync(process.env.ORBE_SMOKE, img.toPNG());
-        console.log('[smoke] ok', process.env.ORBE_SMOKE); app.exit(0);
-      }, Number(process.env.ORBE_SMOKE_WAIT || 4000));
+        fs.writeFileSync(process.env.ARGILA_SMOKE, img.toPNG());
+        console.log('[smoke] ok', process.env.ARGILA_SMOKE); app.exit(0);
+      }, Number(process.env.ARGILA_SMOKE_WAIT || 4000));
     });
   }
   if (isDev) win.loadURL('http://localhost:5173');
@@ -92,6 +100,26 @@ ipcMain.handle('file:open', async (_e, { filters }) => {
   if (r.canceled || !r.filePaths[0]) return null;
   const p = r.filePaths[0];
   return { path: p, name: path.basename(p), data: fs.readFileSync(p) };
+});
+
+// ---------- Engines: gravar SOMENTE em pastas escolhidas pelo usuário ----------
+const allowedDirs = () => new Set(Object.values(readSettings().engines || {}).map((e) => e?.dir).filter(Boolean).map((d) => path.resolve(d)));
+const sessionDirs = new Set();
+ipcMain.handle('dir:pick', async (_e, { title } = {}) => {
+  const r = await dialog.showOpenDialog(win, { title, properties: ['openDirectory', 'createDirectory'] });
+  if (r.canceled || !r.filePaths[0]) return null;
+  sessionDirs.add(path.resolve(r.filePaths[0])); return r.filePaths[0];
+});
+ipcMain.handle('file:writeTo', async (_e, { dir, name, data, binary }) => {
+  const d = path.resolve(dir);
+  if (!sessionDirs.has(d) && !allowedDirs().has(d)) throw new Error('Pasta não autorizada — escolha-a novamente');
+  const target = path.join(d, path.basename(name));
+  fs.mkdirSync(d, { recursive: true });
+  fs.writeFileSync(target, binary ? Buffer.from(data) : data);
+  return target;
+});
+ipcMain.handle('shell:openPath', (_e, p) => {
+  const d = path.resolve(p); if (sessionDirs.has(d) || allowedDirs().has(d)) return shell.openPath(d);
 });
 
 ipcMain.handle('app:info', () => ({

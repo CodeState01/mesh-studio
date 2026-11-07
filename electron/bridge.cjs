@@ -1,8 +1,8 @@
-// Ponte WebSocket local entre servidores MCP externos e a cena do Orbe.
+// Ponte WebSocket local entre servidores MCP externos e a cena do Argila.
 // Protocolo: cliente envia {id, tool, args}; recebe {id, ok, result|error}.
 const { WebSocketServer } = require('ws');
 
-const PORT = Number(process.env.ORBE_MCP_PORT || 47821);
+const PORT = Number(process.env.ARGILA_MCP_PORT || 47821);
 
 function startBridge({ getWindow, ipcMain }) {
   const pending = new Map();
@@ -32,7 +32,7 @@ function startBridge({ getWindow, ipcMain }) {
     });
     ws.on('close', () => getWindow()?.webContents.send('mcp:status', { connected: wss.clients.size }));
   });
-  wss.on('error', (e) => console.error('[orbe bridge]', e.message));
+  wss.on('error', (e) => console.error('[argila bridge]', e.message));
   return { port: PORT, wss };
 }
 

@@ -1,34 +1,90 @@
-// Shell da aplicação: comandos, barra de título, menus, workspaces, toolbar,
-// atalhos estilo DCC, paleta de comandos, divisórias redimensionáveis e status.
+// Shell: navegação por páginas, dock de ferramentas contextual, comandos, atalhos,
+// busca rápida (Ctrl+K), menu Adicionar e diálogos.
 import { registerCommand, runCommand, commands, keyOf } from '../core/commands.js';
 import { state, bus, select } from '../core/state.js';
 import { history } from '../core/history.js';
-import { content, createPrimitive, createText, createLight, createCamera, PRIMITIVES, findTarget } from '../core/objects.js';
-import { setTool, setShading, frameSelected, viewAxis, lookThrough, getRenderCamera, captureImage, camera, orbit } from '../core/viewport.js';
-import { toggleEditMode, selectAllVerts } from '../core/editmode.js';
+import { content, createPrimitive, createText, createLight, createCamera, PRIMITIVES } from '../core/objects.js';
+import { setTool, setShading, frameSelected, viewAxis, lookThrough, getRenderCamera, captureImage } from '../core/viewport.js';
+import { toggleEditMode, selectAllVerts, extrude, deleteFaces, setSelectMode, edit } from '../core/editmode.js';
+import { booleanOp } from '../core/boolean.js';
+import { sculpt, BRUSHES, prepareForSculpt } from '../core/sculpt.js';
 import { createVFX, VFX_TYPES } from '../fx/vfx.js';
 import { insertKey, play } from '../anim/timeline.js';
 import { videoPlay, splitAtPlayhead } from '../video/editor.js';
 import { exportModel, importModel, saveProject, openProject, restoreAutosave, loadProject } from '../io/io.js';
 import { IMPL } from '../core/tools.js';
-import { openSettings } from './aiPanel.js';
+import { settings, saveSettings } from '../core/settings.js';
+import { renderHome } from './homePage.js';
+import { renderSettings } from './settingsPage.js';
+import { renderCommands } from './commandsPage.js';
+import { renderStore } from '../store/storePage.js';
+import { renderCodeLab } from '../code/codeLab.js';
+import { renderEngines } from '../engines/enginesPage.js';
 import { icon, LOGO } from './icons.js';
 import { toast } from './toast.js';
 import { askText } from './dialog.js';
 
 const $ = (s, r = document) => r.querySelector(s);
 
+// ---------- Páginas ----------
+export const PAGES = [
+  { id: 'home', label: 'Início', icon: 'home' },
+  { id: 'model', label: 'Modelar', icon: 'cube', ws: 'model' },
+  { id: 'sculpt', label: 'Esculpir', icon: 'brush', ws: 'sculpt' },
+  { id: 'material', label: 'Materiais', icon: 'texture', ws: 'texture' },
+  { id: 'animate', label: 'Animar', icon: 'key', ws: 'animate' },
+  { id: 'vfx', label: 'Efeitos', icon: 'spark', ws: 'vfx' },
+  { id: 'video', label: 'Vídeo', icon: 'film', ws: 'video' },
+  '-',
+  { id: 'code', label: 'Código', icon: 'code' },
+  { id: 'store', label: 'Loja', icon: 'bag' },
+  { id: 'engines', label: 'Engines', icon: 'engine' },
+  { id: 'commands', label: 'Comandos', icon: 'list' },
+  'flex',
+  { id: 'settings', label: 'Ajustes', icon: 'gear' },
+];
+const RENDER = { home: renderHome, settings: renderSettings, commands: renderCommands, store: renderStore, code: renderCodeLab, engines: renderEngines };
+let current = null;
+
+export function navigate(id, section) {
+  const p = PAGES.find((x) => x.id === id); if (!p) return;
+  current = id;
+  document.querySelectorAll('.nav-btn').forEach((b) => b.classList.toggle('on', b.dataset.page === id));
+  $('#crumb').innerHTML = `<b>${p.label}</b>`;
+  const page = $('#page');
+  if (p.ws) {
+    page.classList.remove('on'); page.innerHTML = '';
+    if (state.mode === 'edit' && p.ws !== 'model') toggleEditMode();
+    state.workspace = p.ws;
+    const bottom = { animate: '260px', vfx: '200px', video: '300px' }[p.ws];
+    $('#center').classList.toggle('no-bottom', !bottom);
+    if (bottom) document.documentElement.style.setProperty('--bottom-h', bottom);
+    if (p.ws === 'sculpt') setTool('select');
+    else if (state.tool === 'select' && p.ws !== 'video') setTool('move');
+    bus.emit('workspace', p.ws);
+    renderDock();
+    window.dispatchEvent(new Event('resize'));
+  } else {
+    page.innerHTML = ''; page.classList.remove('on'); void page.offsetWidth; page.classList.add('on');
+    RENDER[id](page, section);
+  }
+}
+export const setWorkspace = (ws) => navigate(PAGES.find((p) => p.ws === ws)?.id || 'model');
+
 // ---------- Comandos ----------
 function addWithUndo(obj, label) {
   content.add(obj); bus.emit('scene:changed'); select(obj);
   history.push({ label, undo: () => { content.remove(obj); select(null); bus.emit('scene:changed'); }, redo: () => { content.add(obj); bus.emit('scene:changed'); } });
 }
-const PRIM_LABEL = { cube: 'Cubo', sphere: 'Esfera UV', icosphere: 'Icoesfera', cylinder: 'Cilindro', cone: 'Cone', torus: 'Toro', torusknot: 'Nó toroidal', plane: 'Plano', capsule: 'Cápsula', ring: 'Anel' };
-const LIGHT_LABEL = { point: 'Pontual', spot: 'Spot', directional: 'Sol', area: 'Área', hemisphere: 'Hemisfério' };
+const PRIM_LABEL = { cube: 'Cubo', sphere: 'Esfera', icosphere: 'Icoesfera', cylinder: 'Cilindro', cone: 'Cone', torus: 'Rosquinha (toro)', torusknot: 'Nó', plane: 'Plano', capsule: 'Cápsula', ring: 'Anel' };
+const LIGHT_LABEL = { point: 'Lâmpada', spot: 'Holofote', directional: 'Sol', area: 'Painel de luz', hemisphere: 'Luz ambiente' };
 const VFX_LABEL = { fire: 'Fogo', smoke: 'Fumaça', sparks: 'Faíscas', snow: 'Neve', magic: 'Magia', rain: 'Chuva', confetti: 'Confete', dust: 'Poeira' };
 
 function registerAll() {
-  const R = (id, label, run, keys, group) => registerCommand({ id, label, run, keys, group });
+  const R = (id, label, run, keys, group, desc) => registerCommand({ id, label, run, keys, group, desc });
+  // Ir para
+  const goKeys = { model: 'Ctrl+1', sculpt: 'Ctrl+2', material: 'Ctrl+3', animate: 'Ctrl+4', vfx: 'Ctrl+5', video: 'Ctrl+6', code: 'Ctrl+7', store: 'Ctrl+8', engines: 'Ctrl+9', home: 'Ctrl+0', settings: 'Ctrl+,' };
+  PAGES.filter((p) => p.id).forEach((p) => R('go-' + p.id, 'Ir para ' + p.label, () => navigate(p.id), goKeys[p.id], 'Ir'));
   // Arquivo
   R('new', 'Novo projeto', () => { if (confirm('Descartar a cena atual?')) loadProject({ version: 1, scene: { metadata: { version: 4.6, type: 'Object' }, object: { type: 'Group', uuid: crypto.randomUUID(), children: [] } } }); }, 'Ctrl+N', 'Arquivo');
   R('open', 'Abrir projeto…', openProject, 'Ctrl+O', 'Arquivo');
@@ -36,58 +92,68 @@ function registerAll() {
   R('import', 'Importar modelo (glTF, OBJ, FBX, STL)…', importModel, 'Ctrl+I', 'Arquivo');
   for (const f of ['glb', 'gltf', 'obj', 'stl']) R('export-' + f, `Exportar ${f.toUpperCase()}…`, () => exportModel(f), null, 'Arquivo');
   R('restore', 'Recuperar autosave', () => { if (!restoreAutosave()) toast('Nenhum autosave encontrado'); }, null, 'Arquivo');
-  R('render', 'Renderizar imagem (1920×1080)', renderImage, 'F12', 'Render');
+  R('render', 'Renderizar imagem (Full HD)', () => renderImage(), 'F12', 'Render', 'Salva um PNG pela câmera da cena');
   R('render-4k', 'Renderizar imagem 4K', () => renderImage(3840, 2160), null, 'Render');
   // Editar
   R('undo', 'Desfazer', () => history.undo(), 'Ctrl+Z', 'Editar');
   R('redo', 'Refazer', () => history.redo(), 'Ctrl+Shift+Z', 'Editar');
-  R('redo2', 'Refazer', () => history.redo(), 'Ctrl+Y');
-  R('delete', 'Excluir selecionado', () => { if (state.selected) IMPL.delete_object({ target: state.selected }); }, 'X', 'Editar');
-  R('delete2', 'Excluir selecionado', () => runCommand('delete'), 'Delete');
+  registerCommand({ id: 'redo2', label: 'Refazer', run: () => history.redo(), keys: 'Ctrl+Y' });
+  R('delete', 'Excluir', () => { if (state.mode === 'edit') return deleteFaces(); if (state.selected) IMPL.delete_object({ target: state.selected }); }, 'X', 'Editar', 'No modo Face, exclui as faces');
+  registerCommand({ id: 'delete2', label: 'Excluir', run: () => runCommand('delete'), keys: 'Delete' });
   R('duplicate', 'Duplicar', duplicate, 'Shift+D', 'Editar');
-  R('settings', 'Configurações…', () => openSettings(), 'Ctrl+,', 'Editar');
   // Adicionar
   PRIMITIVES.forEach((p) => R('add-' + p, PRIM_LABEL[p], () => addWithUndo(createPrimitive(p), 'Adicionar'), null, 'Adicionar'));
-  R('add-text', 'Texto 3D', async () => { const t = await askText('Texto 3D', 'Orbe'); if (t) addWithUndo(createText(t), 'Texto'); }, null, 'Adicionar');
-  Object.keys(LIGHT_LABEL).forEach((l) => R('add-light-' + l, 'Luz ' + LIGHT_LABEL[l], () => addWithUndo(createLight(l), 'Luz'), null, 'Luz'));
+  R('add-text', 'Texto 3D', async () => { const t = await askText('Texto 3D', 'Argila'); if (t) addWithUndo(createText(t), 'Texto'); }, null, 'Adicionar');
+  Object.keys(LIGHT_LABEL).forEach((l) => R('add-light-' + l, LIGHT_LABEL[l], () => addWithUndo(createLight(l), 'Luz'), null, 'Luz'));
   R('add-camera', 'Câmera', () => addWithUndo(createCamera(), 'Câmera'), null, 'Luz');
-  VFX_TYPES.forEach((v) => R('add-vfx-' + v, 'VFX ' + VFX_LABEL[v], () => addWithUndo(createVFX(v, { position: [0, 0, 0] }), 'VFX'), null, 'VFX'));
+  VFX_TYPES.forEach((v) => R('add-vfx-' + v, VFX_LABEL[v], () => addWithUndo(createVFX(v, { position: [0, 0, 0] }), 'VFX'), null, 'VFX'));
   // Ferramentas
   R('tool-select', 'Selecionar', () => setTool('select'), 'W', 'Ferramentas');
   R('tool-move', 'Mover', () => setTool('move'), 'G', 'Ferramentas');
   R('tool-rotate', 'Girar', () => setTool('rotate'), 'R', 'Ferramentas');
   R('tool-scale', 'Escalar', () => setTool('scale'), 'S', 'Ferramentas');
-  R('edit-mode', 'Alternar modo de edição', toggleEditMode, 'Tab', 'Ferramentas');
-  R('select-all', 'Selecionar tudo / nada', () => (state.mode === 'edit' ? selectAllVerts() : select(state.selected ? null : content.children[0])), 'A', 'Ferramentas');
   R('add-menu', 'Menu Adicionar', () => openAddMenu(lastMouse.x, lastMouse.y), 'Shift+A', 'Ferramentas');
-  R('palette', 'Paleta de comandos', openPalette, 'Ctrl+K', 'Ferramentas');
-  R('palette2', 'Paleta de comandos', openPalette, 'F3');
+  R('palette', 'Buscar comando', openPalette, 'Ctrl+K', 'Ferramentas');
+  registerCommand({ id: 'palette2', label: 'Buscar comando', run: openPalette, keys: 'F3' });
+  // Modelagem
+  R('edit-mode', 'Editar malha (entrar/sair)', toggleEditMode, 'Tab', 'Modelagem', 'Vértices e faces');
+  R('select-vertex', 'Selecionar vértices', () => state.mode === 'edit' && setSelectMode('vertex'), '1', 'Modelagem');
+  R('select-face', 'Selecionar faces', () => state.mode === 'edit' && setSelectMode('face'), '2', 'Modelagem');
+  R('select-all', 'Selecionar tudo / nada', () => (state.mode === 'edit' ? selectAllVerts() : select(state.selected ? null : content.children[0])), 'A', 'Modelagem');
+  R('extrude', 'Extrudar faces', () => { if (state.mode !== 'edit') { toast('Entre no modo Editar (Tab) e selecione faces'); return; } extrude(); }, 'E', 'Modelagem', 'Puxa as faces selecionadas para fora');
+  R('boolean', 'Booleana (unir / subtrair / interseção)…', openBoolean, 'Ctrl+Shift+B', 'Modelagem');
+  // Escultura
+  BRUSHES.forEach(([id, n]) => R('brush-' + id, 'Pincel: ' + n, () => { if (current !== 'sculpt') navigate('sculpt'); sculpt.brush = id; renderDock(); }, null, 'Escultura'));
+  R('sculpt-prepare', 'Preparar malha para esculpir', () => prepareForSculpt(), null, 'Escultura', 'Subdivide para ter detalhe');
   // Exibir
-  R('frame', 'Enquadrar seleção', frameSelected, 'NumpadDecimal', 'Exibir');
-  R('frame2', 'Enquadrar seleção', frameSelected, 'F');
+  R('frame', 'Enquadrar seleção', frameSelected, 'F', 'Exibir');
+  registerCommand({ id: 'frame2', label: 'Enquadrar seleção', run: frameSelected, keys: 'NumpadDecimal' });
   R('view-front', 'Vista frontal', () => viewAxis('front'), 'Numpad1', 'Exibir');
-  R('view-right', 'Vista direita', () => viewAxis('right'), 'Numpad3', 'Exibir');
+  R('view-right', 'Vista lateral', () => viewAxis('right'), 'Numpad3', 'Exibir');
   R('view-top', 'Vista de cima', () => viewAxis('top'), 'Numpad7', 'Exibir');
-  R('look-through', 'Ver pela câmera ativa', lookThroughToggle, 'Numpad0', 'Exibir');
-  ['wire', 'solid', 'material', 'render'].forEach((m, i) => R('shade-' + m, 'Sombreamento: ' + { wire: 'Wireframe', solid: 'Sólido', material: 'Material', render: 'Render' }[m], () => setShading(m), `Shift+${i + 1}`, 'Exibir'));
-  R('toggle-ai', 'Mostrar/ocultar assistente', () => $('#main').classList.toggle('ai-hidden'), 'Ctrl+.', 'Exibir');
-  // Animação
+  R('look-through', 'Ver pela câmera', lookThroughToggle, 'Numpad0', 'Exibir');
+  ['wire', 'solid', 'material', 'render'].forEach((m, i) => R('shade-' + m, 'Visual: ' + { wire: 'Arame', solid: 'Sólido', material: 'Material', render: 'Render' }[m], () => setShading(m), `Shift+${i + 1}`, 'Exibir'));
+  R('toggle-ai', 'Mostrar/ocultar assistente', toggleAI, 'Ctrl+.', 'Exibir');
+  // Animação / vídeo
   R('play', 'Play / Pausa', () => (state.workspace === 'video' ? videoPlay() : play()), 'Space', 'Animação');
-  R('keyframe', 'Inserir keyframe', () => { if (state.selected) { insertKey(state.selected); toast('Keyframe ' + state.time.toFixed(2) + 's'); } }, 'I', 'Animação');
-  R('split', 'Cortar clipe', splitAtPlayhead, 'Ctrl+B', 'Vídeo');
+  R('keyframe', 'Inserir keyframe', () => { if (state.selected) { insertKey(state.selected); toast('Keyframe em ' + state.time.toFixed(2) + 's'); } }, 'I', 'Animação');
+  R('split', 'Cortar clipe no playhead', splitAtPlayhead, 'Ctrl+B', 'Vídeo');
   // Ajuda
-  R('help', 'Atalhos de teclado', showShortcuts, 'F1', 'Ajuda');
-  R('mcp', 'Conectar cliente MCP…', () => openSettings('mcp'), null, 'Ajuda');
-  R('updates', 'Verificar atualizações', () => openSettings('upd'), null, 'Ajuda');
+  R('help', 'Ver todos os comandos', () => navigate('commands'), 'F1', 'Ajuda');
+  R('mcp', 'Conectar outra IA via MCP', () => navigate('settings', 'mcp'), null, 'Ajuda');
+  R('updates', 'Verificar atualizações', () => navigate('settings', 'updates'), null, 'Ajuda');
   bus.on('cmd', (id) => runCommand(id));
+  bus.on('navigate', ({ page, section }) => navigate(page, section));
 }
+
+function toggleAI() { const m = $('#main'); m.classList.toggle('ai-hidden'); settings.prefs.aiOpen = !m.classList.contains('ai-hidden'); saveSettings(); drawStatus(); window.dispatchEvent(new Event('resize')); }
 
 function duplicate() {
   const o = state.selected; if (!o) return;
-  const c = o.clone(); if (o.material) c.material = o.material.clone();
+  if (o.userData.vfx) return addWithUndo(createVFX(o.userData.vfx.type, { ...o.userData.vfx, position: o.position.toArray() }), 'Duplicar');
+  const c = o.clone(); c.traverse((x) => { if (x.material) x.material = x.material.clone(); });
   c.userData = { ...o.userData, id: o.userData.id + 'd' + Date.now().toString(36) };
-  c.name = o.name + '.dup'; c.position.x += 0.5;
-  if (o.userData.vfx) return addWithUndo(createVFX(o.userData.vfx.type, { ...o.userData.vfx, position: c.position.toArray() }), 'Duplicar');
+  c.name = o.name + '.cópia'; c.position.x += 0.6;
   addWithUndo(c, 'Duplicar'); setTool('move');
 }
 
@@ -95,7 +161,7 @@ function lookThroughToggle() {
   if (getRenderCamera()) { lookThrough(null); return; }
   let cam = state.selected?.isCamera ? state.selected : null;
   if (!cam) content.traverse((o) => { if (!cam && o.isCamera) cam = o; });
-  if (!cam) { toast('Adicione uma câmera (Shift+A)'); return; }
+  if (!cam) { toast('Adicione uma câmera primeiro'); return; }
   lookThrough(cam);
 }
 bus.on('camera:view', (c) => $('#cam-badge').classList.toggle('on', !!c));
@@ -104,54 +170,69 @@ async function renderImage(w = 1920, h = 1080) {
   let cam = getRenderCamera(); if (!cam) content.traverse((o) => { if (!cam && o.isCamera) cam = o; });
   const url = captureImage(w, h, cam || undefined);
   const data = Uint8Array.from(atob(url.split(',')[1]), (c) => c.charCodeAt(0));
-  if (window.orbe?.file) { const p = await window.orbe.file.save({ name: 'render.png', data, binary: true, filters: [{ name: 'PNG', extensions: ['png'] }] }); if (p) toast('Render salvo'); }
+  if (window.argila?.file) { const p = await window.argila.file.save({ name: 'render.png', data, binary: true, filters: [{ name: 'PNG', extensions: ['png'] }] }); if (p) toast('Render salvo'); }
   else { const a = document.createElement('a'); a.href = url; a.download = 'render.png'; a.click(); }
 }
 
-// ---------- Menus ----------
-const MENUS = {
-  Arquivo: ['new', 'open', 'save', '-', 'import', '#Exportar', 'export-glb', 'export-gltf', 'export-obj', 'export-stl', '-', 'restore'],
-  Editar: ['undo', 'redo', '-', 'duplicate', 'delete', '-', 'palette', 'settings'],
-  Adicionar: ['#Malha', ...PRIMITIVES.map((p) => 'add-' + p), 'add-text', '#Luz e câmera', ...Object.keys(LIGHT_LABEL).map((l) => 'add-light-' + l), 'add-camera', '#Efeitos', ...VFX_TYPES.map((v) => 'add-vfx-' + v)],
-  Render: ['render', 'render-4k', '-', 'look-through', 'shade-render'],
-  Exibir: ['frame', 'view-front', 'view-right', 'view-top', '-', 'shade-wire', 'shade-solid', 'shade-material', 'shade-render', '-', 'toggle-ai'],
-  Ajuda: ['help', 'mcp', 'updates'],
-};
+// ---------- Booleana ----------
+function openBoolean() {
+  const a = state.selected;
+  if (!a?.isMesh) { toast('Selecione a malha principal primeiro'); return; }
+  const others = content.children.filter((o) => o.isMesh && o !== a && !o.userData.vfx);
+  if (!others.length) { toast('Adicione outra malha para combinar'); return; }
+  let b = others[0], op = 'subtract';
+  const root = $('#modal-root');
+  const draw = () => {
+    root.innerHTML = `<div class="modal-bg"><div class="modal" style="width:min(460px,92vw)"><div class="modal-h">Booleana em “${a.name}”</div><div class="modal-b">
+      <div class="seg" id="bop">${[['union', 'Unir'], ['subtract', 'Subtrair'], ['intersect', 'Interseção']].map(([k, n]) => `<button data-o="${k}" class="${k === op ? 'on' : ''}">${n}</button>`).join('')}</div>
+      <p class="muted" style="margin-top:12px">Com qual objeto? (ele será consumido)</p>
+      <div class="bool-list">${others.map((o, i) => `<button data-i="${i}" class="${o === b ? 'on' : ''}">${o.name}</button>`).join('')}</div></div>
+      <div class="modal-f"><button class="btn" data-x>Cancelar</button><button class="btn primary" data-ok>Aplicar</button></div></div></div>`;
+    root.querySelector('#bop').onclick = (e) => { const x = e.target.closest('[data-o]'); if (x) { op = x.dataset.o; draw(); } };
+    root.querySelector('.bool-list').onclick = (e) => { const x = e.target.closest('[data-i]'); if (x) { b = others[+x.dataset.i]; draw(); } };
+    root.querySelector('[data-x]').onclick = () => (root.innerHTML = '');
+    root.querySelector('[data-ok]').onclick = () => {
+      root.innerHTML = '';
+      try { const r = booleanOp(a, b, op); toast(`Booleana aplicada · ${Math.round(r.triangles).toLocaleString()} triângulos`); } catch (e) { toast(e.message, { kind: 'error' }); }
+    };
+  };
+  draw();
+}
 
+// ---------- Menu Adicionar ----------
+let openPop = null;
+function closePop() { openPop?.remove(); openPop = null; }
+function showPop(html, x, y) {
+  closePop(); const p = document.createElement('div'); p.className = 'menu-pop'; p.innerHTML = html; document.body.appendChild(p);
+  const r = p.getBoundingClientRect();
+  p.style.left = Math.max(8, Math.min(x, innerWidth - r.width - 8)) + 'px'; p.style.top = Math.max(8, Math.min(y, innerHeight - r.height - 8)) + 'px';
+  p.onclick = (e) => { const b = e.target.closest('[data-cmd]'); if (b) { closePop(); runCommand(b.dataset.cmd); } };
+  openPop = p;
+}
 function menuHTML(items) {
   return items.map((id) => {
     if (id === '-') return '<hr>';
     if (id.startsWith('#')) return `<div class="sub-h">${id.slice(1)}</div>`;
-    const c = commands.get(id); if (!c) return '';
-    return `<button data-cmd="${id}">${c.label}${c.keys ? `<kbd>${c.keys.replace('Numpad', 'Num ')}</kbd>` : ''}</button>`;
+    const c = commands.get(id); return c ? `<button data-cmd="${id}">${c.label}${c.keys ? `<kbd>${c.keys}</kbd>` : ''}</button>` : '';
   }).join('');
 }
-
-let openPop = null;
-function closePop() { openPop?.remove(); openPop = null; document.querySelectorAll('.menus > button').forEach((b) => b.classList.remove('open')); }
-function showPop(html, x, y) {
-  closePop(); const p = document.createElement('div'); p.className = 'menu-pop'; p.innerHTML = html; document.body.appendChild(p);
-  const r = p.getBoundingClientRect();
-  p.style.left = Math.min(x, innerWidth - r.width - 8) + 'px'; p.style.top = Math.min(y, innerHeight - r.height - 8) + 'px';
-  p.onclick = (e) => { const b = e.target.closest('[data-cmd]'); if (b) { closePop(); runCommand(b.dataset.cmd); } };
-  openPop = p; return p;
-}
 function openAddMenu(x, y) {
-  const extra = [...commands.keys()].filter((k) => k.startsWith('add-') && !MENUS.Adicionar.includes(k) && !k.startsWith('add-menu'));
-  showPop(menuHTML([...MENUS.Adicionar, ...(extra.length ? ['#Plugins', ...extra] : [])]), x, y);
+  const base = ['#Formas', ...PRIMITIVES.map((p) => 'add-' + p), 'add-text', '#Luz e câmera', ...Object.keys(LIGHT_LABEL).map((l) => 'add-light-' + l), 'add-camera', '#Efeitos', ...VFX_TYPES.map((v) => 'add-vfx-' + v)];
+  const extra = [...commands.keys()].filter((k) => k.startsWith('add-') && !base.includes(k) && k !== 'add-menu');
+  showPop(menuHTML([...base, ...(extra.length ? ['#Plugins', ...extra] : []), '-', 'import']), x, y);
 }
-document.addEventListener('pointerdown', (e) => { if (openPop && !openPop.contains(e.target) && !e.target.closest('.menus,[data-anchor=add]')) closePop(); });
+document.addEventListener('pointerdown', (e) => { if (openPop && !openPop.contains(e.target) && !e.target.closest('[data-anchor=add]')) closePop(); });
 
-// ---------- Paleta de comandos ----------
+// ---------- Busca rápida (Ctrl+K) ----------
 function openPalette() {
   const root = $('#modal-root');
-  root.innerHTML = `<div class="modal-bg" style="place-items:start center;padding-top:14vh"><div class="modal palette"><input placeholder="Buscar comando…" id="pal-in"><div class="palette-list" id="pal-list"></div></div></div>`;
+  root.innerHTML = `<div class="modal-bg" style="place-items:start center;padding-top:14vh"><div class="modal palette"><input placeholder="O que você quer fazer?" id="pal-in"><div class="palette-list" id="pal-list"></div></div></div>`;
   const list = [...commands.values()].filter((c) => c.group);
   let idx = 0, shown = list;
-  const draw = () => { $('#pal-list').innerHTML = shown.slice(0, 60).map((c, i) => `<button class="${i === idx ? 'on' : ''}" data-cmd="${c.id}"><span style="opacity:.55;width:74px">${c.group}</span>${c.label}${c.keys ? `<kbd>${c.keys}</kbd>` : ''}</button>`).join(''); };
+  const draw = () => { $('#pal-list').innerHTML = shown.slice(0, 80).map((c, i) => `<button class="${i === idx ? 'on' : ''}" data-cmd="${c.id}"><span style="opacity:.55;width:84px;flex:none">${c.group}</span>${c.label}${c.keys ? `<kbd>${c.keys}</kbd>` : ''}</button>`).join(''); };
   const inp = $('#pal-in'); inp.focus(); draw();
   const close = () => (root.innerHTML = '');
-  inp.oninput = () => { const q = inp.value.toLowerCase(); shown = list.filter((c) => (c.label + ' ' + c.group).toLowerCase().includes(q)); idx = 0; draw(); };
+  inp.oninput = () => { const q = inp.value.toLowerCase(); shown = list.filter((c) => (c.label + ' ' + c.group + ' ' + (c.desc || '')).toLowerCase().includes(q)); idx = 0; draw(); };
   inp.onkeydown = (e) => {
     e.stopPropagation();
     if (e.key === 'ArrowDown') { idx = Math.min(shown.length - 1, idx + 1); draw(); e.preventDefault(); }
@@ -162,118 +243,110 @@ function openPalette() {
   root.querySelector('.modal-bg').onclick = (e) => { const b = e.target.closest('[data-cmd]'); if (b) { close(); runCommand(b.dataset.cmd); } else if (e.target.classList.contains('modal-bg')) close(); };
 }
 
-function showShortcuts() {
-  const rows = [...commands.values()].filter((c) => c.keys && c.group).map((c) => `<div class="row"><label style="font:11px var(--mono);color:var(--accent)">${c.keys}</label><span>${c.label}</span></div>`).join('');
-  $('#modal-root').innerHTML = `<div class="modal-bg"><div class="modal"><div class="modal-h">Atalhos<button class="icon-btn" data-x>✕</button></div><div class="modal-b" style="columns:2;column-gap:24px">${rows}
-    <div class="row"><label style="font:11px var(--mono);color:var(--accent)">Botão do meio</label><span>Orbitar (Shift: pan)</span></div>
-    <div class="row"><label style="font:11px var(--mono);color:var(--accent)">Alt+Esquerdo</label><span>Orbitar</span></div></div></div></div>`;
-  $('#modal-root').onclick = (e) => { if (e.target.closest('[data-x]') || e.target.classList.contains('modal-bg')) $('#modal-root').innerHTML = ''; };
+// ---------- Dock de ferramentas (muda conforme a página) ----------
+const T = (tool, ic, label) => ({ tool, ic, label });
+const C = (cmd, ic, label) => ({ cmd, ic, label });
+function dockItems() {
+  const transform = [T('select', 'select', 'Selecionar'), T('move', 'move', 'Mover'), T('rotate', 'rotate', 'Girar'), T('scale', 'scale', 'Escalar')];
+  if (state.mode === 'edit') return [
+    { mode: 'vertex', ic: 'vertex', label: 'Vértice' }, { mode: 'face', ic: 'face', label: 'Face' }, '|',
+    C('extrude', 'extrude', 'Extrudar'), C('delete', 'trash', 'Excluir'), C('select-all', 'layers', 'Tudo'), '|', C('edit-mode', 'check', 'Concluir'),
+  ];
+  switch (state.workspace) {
+    case 'model': return [...transform, '|', C('add-menu', 'plus', 'Adicionar'), C('add-text', 'text', 'Texto'), '|', C('edit-mode', 'mesh', 'Editar'), C('boolean', 'boolean', 'Booleana'), C('duplicate', 'copy', 'Duplicar'), C('delete', 'trash', 'Excluir')];
+    case 'sculpt': return [...BRUSHES.map(([id, n]) => ({ brush: id, ic: 'brush', label: n })), '|', { slider: 'radius', label: 'Raio', min: 0.05, max: 1.5, step: 0.01 }, { slider: 'strength', label: 'Força', min: 0.05, max: 1, step: 0.01 }, '|', C('sculpt-prepare', 'mesh', 'Mais detalhe')];
+    case 'texture': return [T('move', 'move', 'Mover'), T('rotate', 'rotate', 'Girar'), '|', { go: 'store', ic: 'bag', label: 'Materiais prontos' }, C('import', 'upload', 'Importar')];
+    case 'animate': return [...transform, '|', C('keyframe', 'key', 'Keyframe'), C('play', 'play', 'Play')];
+    case 'vfx': return [T('move', 'move', 'Mover'), '|', ...VFX_TYPES.map((v) => C('add-vfx-' + v, 'spark', VFX_LABEL[v]))];
+    default: return [];
+  }
+}
+function renderDock() {
+  const dock = $('#tool-dock');
+  dock.innerHTML = dockItems().map((it, i) => {
+    if (it === '|') return '<i class="sep"></i>';
+    if (it.slider) return `<label class="dock-slider">${it.label} <input type="range" data-slider="${it.slider}" min="${it.min}" max="${it.max}" step="${it.step}" value="${sculpt[it.slider]}"></label>`;
+    const on = (it.tool && it.tool === state.tool) || (it.brush && it.brush === sculpt.brush) || (it.mode && it.mode === edit.select);
+    return `<button class="dock-btn ${on ? 'on' : ''}" data-i="${i}" ${it.cmd === 'add-menu' ? 'data-anchor="add"' : ''} ${it.cmd === 'add-text' ? 'data-anchor="tool-text"' : ''}>${icon(it.ic, 19)}<span>${it.label}</span></button>`;
+  }).join('');
+  const items = dockItems();
+  dock.onclick = (e) => {
+    const b = e.target.closest('[data-i]'); if (!b) return; const it = items[+b.dataset.i];
+    if (it.tool) setTool(it.tool);
+    if (it.cmd === 'add-menu') { const r = b.getBoundingClientRect(); openAddMenu(r.left, r.top - 420); return; }
+    if (it.cmd) runCommand(it.cmd);
+    if (it.brush) sculpt.brush = it.brush;
+    if (it.mode) setSelectMode(it.mode);
+    if (it.go) navigate(it.go);
+    renderDock();
+  };
+  dock.oninput = (e) => { const s = e.target.dataset.slider; if (s) sculpt[s] = +e.target.value; };
 }
 
-// ---------- Construção da UI ----------
-const WORKSPACES = [['model', 'Modelagem'], ['texture', 'Texturas'], ['animate', 'Animação'], ['vfx', 'VFX'], ['video', 'Vídeo']];
+// ---------- Construção ----------
 const lastMouse = { x: 300, y: 200 };
+let mcpN = 0, upd = null;
+function drawStatus() {
+  const aiOn = !$('#main').classList.contains('ai-hidden');
+  $('#tb-status').innerHTML = `${upd?.status === 'ready' ? `<button class="update-chip" id="upd">Atualizar para ${upd.version}</button>` : upd?.status === 'downloading' ? `<span>Baixando ${upd.percent}%</span>` : ''}
+    <button id="mcp-st" title="Clientes MCP conectados"><i class="dot ${mcpN ? 'ok' : ''}"></i>MCP${mcpN ? ' ' + mcpN : ''}</button>
+    <button id="ai-tg" class="${aiOn ? 'on' : ''}" title="Assistente (Ctrl+.)">${icon('chat', 16)} Assistente</button>`;
+  $('#upd')?.addEventListener('click', () => window.argila.update.install());
+  $('#mcp-st').onclick = () => navigate('settings', 'mcp');
+  $('#ai-tg').onclick = toggleAI;
+}
 
 export function initShell() {
   registerAll();
-  $('#brand').innerHTML = `${LOGO(20)}<span>orbe</span><small>studio</small>`;
-  const menus = $('#menus');
-  menus.innerHTML = Object.keys(MENUS).map((m) => `<button data-menu="${m}" ${m === 'Adicionar' ? 'data-anchor="add"' : ''}>${m}</button>`).join('');
-  menus.onclick = (e) => {
-    const b = e.target.closest('[data-menu]'); if (!b) return;
-    if (b.classList.contains('open')) return closePop();
-    const r = b.getBoundingClientRect(); const m = b.dataset.menu;
-    if (m === 'Adicionar') openAddMenu(r.left, r.bottom + 4); else showPop(menuHTML(MENUS[m]), r.left, r.bottom + 4);
-    b.classList.add('open');
-  };
-  menus.onpointerover = (e) => { const b = e.target.closest('[data-menu]'); if (b && openPop && !b.classList.contains('open')) b.click(); };
+  $('#brand').innerHTML = `${LOGO(24)}<span>Argila</span><small>studio</small>`;
+  $('#search-pill').innerHTML = `${icon('search', 15)}<span>Buscar comandos, ferramentas…</span><kbd>Ctrl</kbd><kbd>K</kbd>`;
+  $('#search-pill').onclick = openPalette;
 
-  // Workspaces com "pílula" deslizante
-  const ws = $('#workspaces');
-  ws.innerHTML = WORKSPACES.map(([id, n]) => `<button data-ws="${id}">${n}</button>`).join('') + '<i class="pill"></i>';
-  ws.onclick = (e) => { const b = e.target.closest('[data-ws]'); if (b) setWorkspace(b.dataset.ws); };
+  $('#nav').innerHTML = PAGES.map((p) => p === '-' ? '<hr>' : p === 'flex' ? '<div style="flex:1"></div>' : `<button class="nav-btn" data-page="${p.id}" title="${p.label}">${icon(p.icon, 21)}<span>${p.label}</span></button>`).join('');
+  $('#nav').onclick = (e) => { const b = e.target.closest('[data-page]'); if (b) navigate(b.dataset.page); };
 
-  // Toolbar
-  const tools = [['select', 'select', 'Selecionar (W)'], ['move', 'move', 'Mover (G)'], ['rotate', 'rotate', 'Girar (R)'], ['scale', 'scale', 'Escalar (S)']];
-  $('#toolbar').innerHTML = tools.map(([id, ic, tip]) => `<button class="tbtn" data-tool="${id}" data-tip="${tip}">${icon(ic)}</button>`).join('') +
-    `<hr><button class="tbtn" data-cmd="edit-mode" data-tip="Modo edição (Tab)">${icon('mesh')}</button>
-    <button class="tbtn" data-cmd="add-text" data-anchor="tool-text" data-tip="Texto 3D">${icon('text')}</button>
-    <button class="tbtn" data-cmd="add-light-point" data-tip="Luz">${icon('light')}</button>
-    <button class="tbtn" data-cmd="add-camera" data-tip="Câmera">${icon('camera')}</button>
-    <button class="tbtn" data-cmd="add-vfx-magic" data-tip="VFX">${icon('spark')}</button>
-    <hr><button class="tbtn" data-cmd="frame" data-tip="Enquadrar (F)">${icon('frame')}</button>
-    <button class="tbtn" data-cmd="render" data-anchor="render" data-tip="Renderizar (F12)">${icon('aperture')}</button>
-    <div style="flex:1"></div>
-    <button class="tbtn" data-cmd="palette" data-tip="Comandos (Ctrl+K)">${icon('sliders')}</button>
-    <button class="tbtn" data-cmd="settings" data-tip="Configurações">${icon('gear')}</button>`;
-  $('#toolbar').onclick = (e) => { const b = e.target.closest('button'); if (!b) return; if (b.dataset.tool) setTool(b.dataset.tool); if (b.dataset.cmd) runCommand(b.dataset.cmd); };
-  bus.on('tool', (t) => document.querySelectorAll('[data-tool]').forEach((b) => b.classList.toggle('on', b.dataset.tool === t)));
-
-  // Sobreposições do viewport
-  $('#mode-seg').innerHTML = `<button data-m="object" class="on">${icon('cube', 14)} Objeto</button><button data-m="edit">${icon('mesh', 14)} Edição</button>`;
+  $('#mode-seg').innerHTML = `<button data-m="object" class="on">${icon('cube', 14)} Objeto</button><button data-m="edit">${icon('mesh', 14)} Editar</button>`;
   $('#mode-seg').onclick = (e) => { const b = e.target.closest('[data-m]'); if (b && b.dataset.m !== state.mode) toggleEditMode(); };
-  bus.on('mode', (m) => document.querySelectorAll('#mode-seg button').forEach((b) => b.classList.toggle('on', b.dataset.m === m)));
-  $('#vp-add').innerHTML = `<button>${icon('plus', 14)} Adicionar</button>`;
-  $('#vp-add').onclick = (e) => { const r = e.currentTarget.getBoundingClientRect(); openAddMenu(r.left, r.bottom + 4); };
-  $('#shading-seg').innerHTML = [['wire', 'Wire'], ['solid', 'Sólido'], ['material', 'Material'], ['render', 'Render']].map(([m, n]) => `<button data-s="${m}" title="Shift+${['wire', 'solid', 'material', 'render'].indexOf(m) + 1}">${n}</button>`).join('');
+  bus.on('mode', (m) => { document.querySelectorAll('#mode-seg button').forEach((b) => b.classList.toggle('on', b.dataset.m === m)); renderDock(); });
+  bus.on('edit:select-mode', renderDock);
+  bus.on('tool', renderDock);
+  $('#vp-add').innerHTML = `<button data-anchor="add">${icon('plus', 15)} Adicionar</button>`;
+  $('#vp-add').onclick = (e) => { const r = e.currentTarget.getBoundingClientRect(); openAddMenu(r.left, r.bottom + 6); };
+  $('#shading-seg').innerHTML = [['wire', 'Arame'], ['solid', 'Sólido'], ['material', 'Material'], ['render', 'Render']].map(([m, n], i) => `<button data-s="${m}" title="Shift+${i + 1}">${n}</button>`).join('');
   $('#shading-seg').onclick = (e) => { const b = e.target.closest('[data-s]'); if (b) setShading(b.dataset.s); };
   bus.on('shading', (m) => document.querySelectorAll('#shading-seg button').forEach((b) => b.classList.toggle('on', b.dataset.s === m)));
-  $('#vp-hint').textContent = 'Meio: orbitar · Shift+Meio: pan · Roda: zoom · Shift+A: adicionar · Ctrl+K: comandos';
+  $('#vp-hint').innerHTML = 'Botão do meio: girar vista · Shift+meio: mover vista · Roda: zoom';
+  $('#sc-toggle').onclick = () => $('#scene-card').classList.toggle('collapsed');
 
-  // Status bar
-  const sb = $('#statusbar');
-  const drawStatus = () => {
-    let tris = 0, objs = 0; content.traverse((o) => { if (o.isMesh && !o.userData.proxy) { objs++; const g = o.geometry; tris += (g.index ? g.index.count : g.attributes.position.count) / 3; } });
-    sb.innerHTML = `<span>${state.selected ? state.selected.name : 'Nenhuma seleção'}</span><span>${objs} malhas · ${Math.round(tris).toLocaleString()} tri</span><span id="hist-lbl"></span>
-      <span class="r"><span><kbd>Shift A</kbd> adicionar</span><span><kbd>G R S</kbd> transformar</span><span><kbd>Tab</kbd> edição</span><span><kbd>I</kbd> keyframe</span></span>`;
-  };
-  ['scene:changed', 'selection'].forEach((e) => bus.on(e, drawStatus)); drawStatus();
-  bus.on('history', ({ label }) => { const h = $('#hist-lbl'); if (h) { h.textContent = label; h.style.color = 'var(--text2)'; } });
+  if (!settings.prefs.aiOpen) $('#main').classList.add('ai-hidden');
+  window.argila?.mcp?.onStatus((d) => { mcpN = d.connected; drawStatus(); if (d.connected) toast('Uma IA externa se conectou via MCP'); });
+  window.argila?.update?.on((d) => { upd = d; drawStatus(); if (d.status === 'ready') toast(`Versão ${d.version} pronta`, { ms: 8000, action: { label: 'Reiniciar', run: () => window.argila.update.install() } }); });
+  drawStatus();
 
-  // Status MCP + atualização na barra de título
-  const st = $('#tb-status'); let mcpN = 0, upd = null;
-  const drawTB = () => {
-    st.innerHTML = `${upd?.status === 'ready' ? `<button class="update-chip" id="upd">Atualizar para ${upd.version}</button>` : upd?.status === 'downloading' ? `<span>Baixando ${upd.percent}%</span>` : ''}
-      <span title="Clientes MCP conectados"><i class="dot ${mcpN ? 'ok' : ''}"></i>MCP ${mcpN ? mcpN : ''}</span>`;
-    $('#upd')?.addEventListener('click', () => window.orbe.update.install());
-  };
-  window.orbe?.mcp?.onStatus((d) => { mcpN = d.connected; drawTB(); if (d.connected) toast('Cliente MCP conectado'); });
-  window.orbe?.update?.on((d) => { upd = d; drawTB(); if (d.status === 'ready') toast(`Versão ${d.version} pronta`, { ms: 8000, action: { label: 'Reiniciar', run: () => window.orbe.update.install() } }); });
-  drawTB();
-
-  setupKeys(); setupSplitters();
+  setupKeys(); setupSplitter();
   window.addEventListener('pointermove', (e) => { lastMouse.x = e.clientX; lastMouse.y = e.clientY; });
 }
 
-export function setWorkspace(id) {
-  state.workspace = id;
-  document.querySelectorAll('[data-ws]').forEach((b) => b.classList.toggle('on', b.dataset.ws === id));
-  const on = $(`[data-ws="${id}"]`), pill = $('#workspaces .pill');
-  pill.style.left = on.offsetLeft + 'px'; pill.style.width = on.offsetWidth + 'px';
-  document.documentElement.style.setProperty('--bottom-h', { video: '300px', animate: '280px' }[id] || '220px');
-  if (id === 'vfx') state.pauseVfxWhenStopped = false;
-  bus.emit('workspace', id);
-}
-
 function setupKeys() {
-  const map = new Map(); commands.forEach((c) => c.keys && map.set(c.keys, c.id));
   window.addEventListener('keydown', (e) => {
-    if (e.target.matches('input, textarea, select')) return;
-    if ($('#modal-root').children.length && e.key === 'Escape') { $('#modal-root').innerHTML = ''; return; }
+    if (e.target?.closest?.('input, textarea, select, .cm-editor')) return;
+    if ($('#modal-root').children.length) { if (e.key === 'Escape') $('#modal-root').innerHTML = ''; return; }
     if (e.key === 'Escape') { closePop(); if (state.mode === 'edit') toggleEditMode(); return; }
     const k = keyOf(e);
-    // Atalhos de plugins registrados depois também valem
-    const id = map.get(k) || [...commands.values()].find((c) => c.keys === k)?.id;
-    if (id) { e.preventDefault(); runCommand(id); }
+    const cmd = [...commands.values()].find((c) => c.keys === k);
+    if (!cmd) return;
+    // Em páginas sem 3D, só atalhos globais (Ctrl+…, F-keys) valem.
+    if ($('#page').classList.contains('on') && !/^(Ctrl|F\d)/.test(k)) return;
+    e.preventDefault(); runCommand(cmd.id);
   });
 }
 
-function setupSplitters() {
-  const drag = (el, onMove) => el.addEventListener('pointerdown', (e) => {
+function setupSplitter() {
+  const el = $('#splitter-h');
+  el.addEventListener('pointerdown', (e) => {
     el.classList.add('drag'); el.setPointerCapture(e.pointerId);
-    const mv = (ev) => onMove(ev); const up = () => { el.classList.remove('drag'); el.removeEventListener('pointermove', mv); };
-    el.addEventListener('pointermove', mv); el.addEventListener('pointerup', up, { once: true });
+    const mv = (ev) => { const r = $('#center').getBoundingClientRect(); document.documentElement.style.setProperty('--bottom-h', Math.max(120, Math.min(r.height - 160, r.bottom - ev.clientY)) + 'px'); };
+    el.addEventListener('pointermove', mv);
+    el.addEventListener('pointerup', () => { el.classList.remove('drag'); el.removeEventListener('pointermove', mv); }, { once: true });
   });
-  drag($('#splitter-h'), (e) => { const r = $('#center').getBoundingClientRect(); document.documentElement.style.setProperty('--bottom-h', Math.max(120, Math.min(r.height - 160, r.bottom - e.clientY)) + 'px'); });
-  drag($('#splitter-v'), (e) => { const aiW = $('#main').classList.contains('ai-hidden') ? 0 : $('#ai').offsetWidth; document.documentElement.style.setProperty('--side-w', Math.max(240, Math.min(520, innerWidth - e.clientX - aiW)) + 'px'); });
 }
