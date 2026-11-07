@@ -1,65 +1,68 @@
 # Argila Studio
 
-Desktop app (Windows) for **3D modeling, animation, motion design, VFX/SFX, texturing and video editing**. It has a built-in AI assistant that works through **multiple cursors at the same time**, an **MCP server** that external AI clients can connect to, **70 AI providers** (including 19 local runtimes), and **automatic updates**.
+Open-source desktop app (Windows) for **3D modeling, sculpting, materials, animation, VFX/SFX and video editing**. The interface is friendly instead of cockpit-like. Argila includes an AI assistant that works through **multiple cursors at once**, an **MCP server** for external AI clients, **70 AI providers** (19 of them local), a **store** with previews, a **Code Lab** with live preview, **engine export** and **auto-updates**.
+
+License: MIT.
 
 ## Running it
 
 ```bash
 npm install
 npm start          # build + open the app
-npm run dev        # development with hot reload (Vite + Electron)
-npm run dist       # generate the Windows installer in release/
+npm run dev        # development with hot reload
+npm run dist       # Windows installer in release/
 ```
 
-## Features
+## Pages
 
-| Area | What it does |
+| Page | What it does |
 |---|---|
-| **Modeling** | 10 primitives + plugins, 3D text, Edit Mode (Tab) with vertex editing, smooth/flat shading |
-| **Modifiers** | Array, Mirror, Subdivide, Decimate, Twist, Bend (all with Ctrl+Z) |
-| **Materials** | Full PBR (metalness, roughness, clearcoat, transmission, emission, opacity) |
-| **Textures** | 10 procedural textures with an automatically generated normal map + image import |
-| **Lighting** | Point, Spot, Sun, Area, Hemisphere + studio environment (PMREM) and sky presets |
-| **Animation** | Keyframes with 7 easings, a dopesheet with draggable keys, 10 motion presets |
-| **VFX** | GPU particles: fire, smoke, sparks, snow, rain, magic, confetti, dust |
-| **SFX** | 9 synthesized sounds (no files needed) + audio import, synced to the timeline |
-| **Video** | NLE with 3 video tracks + 1 audio track, 3D scene, animated title, color, image and video clips, transitions, cutting, and **WebM export with audio** |
-| **Render** | Bloom, ACES tone mapping, soft shadows, PNG/4K render through the scene camera |
-| **I/O** | Import glTF/GLB/OBJ/FBX/STL, export GLB/glTF/OBJ/STL, versioned `.argila` projects, autosave |
-| **Editor** | Undo/redo, outliner, scrub fields, command palette (Ctrl+K), DCC-style shortcuts |
+| **Home** | Quick start and autosave recovery |
+| **Model** | Primitives, 3D text, **Edit mode (Tab)** with vertices/faces, **Extrude (E)**, delete faces, **booleans** (union/subtract/intersect), modifiers (array, mirror, subdivide, decimate, twist, bend) |
+| **Sculpt** | Inflate, Dig, Grab, Smooth and Flatten brushes, with adjustable radius/strength and BVH acceleration |
+| **Materials** | PBR, 10 procedural textures with normal maps, image import |
+| **Animate** | Keyframes, 7 easings, dopesheet, 10 motion presets, SFX on the timeline |
+| **Effects** | 8 GPU particle types |
+| **Video** | NLE with 3D-scene, title, color, image, video and audio clips, transitions, and WebM export with audio |
+| **Code** | Code Lab: JavaScript editor (CodeMirror) with **live 3D preview**, templates, console, and "send to scene" |
+| **Store** | Free models, materials, textures, VFX and SFX. **Every item shows a real image** (a 3D render, a particle simulation, or the sound's waveform). The Community tab adds hundreds of CC0 assets from Poly Haven (models, textures and HDRI skies) |
+| **Engines** | Sends the scene or the selection to **Unity, Unreal, Godot, Roblox Studio, Blender** or Web, with **live sync** |
+| **Commands** | Lists every command with its shortcut. Ctrl+K opens quick search from anywhere |
+| **Settings** | AI providers and keys (encrypted), appearance/brightness, viewport, AI cursors, MCP, updates |
 
 ## AI
 
-- **Assistant panel**: pick a provider and a model, then describe what you want. The tools the model calls in a single response **run in parallel, each with its own cursor**. You can set 1 to 8 cursors.
-- **Providers**: Anthropic, OpenAI, Gemini, xAI, Mistral, DeepSeek, Groq, OpenRouter, Together, Fireworks, NVIDIA, Hugging Face, Moonshot, Qwen, and others, for 51 cloud providers in total. **Local runtimes**: Ollama, LM Studio, llama.cpp, vLLM, SGLang, LocalAI, Jan, KoboldCpp, and 11 more. To add one, append a line to `src/ai/providers.js`.
-- **Demo mode** (offline) shows the cursors working without needing an API key.
-- API keys are encrypted with the operating system's `safeStorage`.
+- Tools the model calls together **run in parallel, each with its own cursor** (1 to 8).
+- 51 cloud providers plus 19 local ones (Ollama, LM Studio, llama.cpp, vLLM…). To add a provider, add a line to `src/ai/providers.js`.
+- MCP: `claude mcp add argila -- node "<pasta>/mcp/server.mjs"`. Self-test: `node scripts/mcp-selftest.mjs`.
 
-## MCP: controlling Argila from other AI clients
+## Engine integrations (`integrations/`)
 
-With the app open:
-
-```json
-{ "mcpServers": { "argila": { "command": "node", "args": ["C:/caminho/para/argila-studio/mcp/server.mjs"] } } }
-```
-
-For Claude Code: `claude mcp add argila -- node "C:/caminho/para/argila-studio/mcp/server.mjs"`.
-Self-test: `node scripts/mcp-selftest.mjs`.
+| Engine | How it works |
+|---|---|
+| Blender | `blender/argila_live_link.py` add-on. Reloads automatically on every send. |
+| Unreal | `unreal/argila_import.py` Python script. Imports into `/Game/Argila`. |
+| Unity | `unity/ArgilaLiveLink.cs`. Updates the instance in the scene. Requires glTFast. |
+| Godot | Native `.glb` import. See `godot/README.md`. |
+| Roblox | Uses Import 3D. See `roblox/README.md`. |
 
 ## Future updates
 
-- **Auto-update**: set `build.publish` in `package.json` (owner/repo), then run `npm version patch && git push --follow-tags`. The workflow in `.github/workflows/release.yml` publishes the release, and installed apps update themselves.
-- **Project migrations**: `src/io/io.js` → `MIGRATIONS`. Old projects keep opening after the format changes.
-- **Plugins**: any `src/plugins/*.js` file is loaded automatically (see `exemplo-piramide.js`).
-- **New AI/MCP tools**: declare them in `mcp/toolspec.mjs` and implement them in `src/core/tools.js`. Both the MCP server and the built-in assistant pick them up automatically.
+- **Auto-update** through GitHub Releases. Run `npm version patch && git push --follow-tags`.
+- **Project migrations** live in `src/io/io.js`. Older `.orbe` and `.argila` files still open.
+- **Plugins**: `src/plugins/*.js` files are loaded automatically.
+- **New AI/MCP tools**: add them to `mcp/toolspec.mjs` and `src/core/tools.js`.
 
 ## Architecture
 
 ```
-electron/   main process: window, MCP bridge (WebSocket), AI proxy, updater
-mcp/        MCP server (stdio) + toolspec (single source of tools)
-src/core/   viewport, objects, commands, history, edit mode, modifiers, tools, plugins
-src/ai/     providers, unified client (OpenAI/Anthropic), agent, demo
-src/fx/     textures, VFX, audio      src/anim/  timeline      src/video/  editor
-src/ui/     shell, panels, timeline, AI panel, AI cursors, icons
+electron/      window, MCP bridge, AI proxy, engines (folders allowed by the user), updater
+mcp/           MCP server + toolspec (single source of truth for tools)
+src/core/      viewport, objects, edit mode, sculpt, booleans, modifiers, commands, settings
+src/store/     catalog, thumbnail generator, store page (+ Poly Haven)
+src/code/      Code Lab        src/engines/  engine export
+src/ai/        providers, client, agent      src/ui/  shell, pages, panels, AI cursors
+integrations/  scripts for Blender, Unreal, Unity, Godot, Roblox
 ```
+
+Credits: Poly Haven assets (CC0). Helvetiker font (license in `src/assets/FONT_LICENSE`).
