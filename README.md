@@ -66,3 +66,17 @@ integrations/  scripts for Blender, Unreal, Unity, Godot, Roblox
 ```
 
 Credits: Poly Haven assets (CC0). Helvetiker font (license in `src/assets/FONT_LICENSE`).
+
+## Precision & modeling (v0.2)
+
+- **Floating-canvas UI**: full-screen viewport with glass panels, Lucide icons on every control, provider logos (Simple Icons, CC0).
+- **Multi-selection** (Shift/Ctrl+click), pivot (median / active / individual / 3D cursor), global/local orientation.
+- **Modal transforms**: `G`/`R`/`S` → `X`/`Y`/`Z` → type a value → `Enter` (Esc cancels, Ctrl toggles snap).
+- **Snapping** by increment, grid or vertex; **3D cursor** (Shift+right-click); **ruler** (Shift+M); align & distribute; exact dimensions in meters.
+- **EditMesh** (quads/n-gons): vertex/edge/face modes, edge loops (Alt+click), box select, proportional editing (O),
+  Extrude (E), Inset (I), Bevel (Ctrl+B), Loop Cut (Ctrl+R), Merge (M), Connect (J), Fill (F), Subdivide, Flip.
+  Every operation opens **"Adjust last operation"** with exact values. Geometry is covered by `node tests/editmesh.test.mjs`.
+- **UV**: smart/box/planar/spherical/cylindrical unwrap, UV preview, **texture painting** on the model.
+- **Rigging**: auto-rig with automatic weights, Pose mode, bone keyframes.
+- **Physics**: rigid bodies (cannon-es) with live simulation and bake-to-keyframes; Verlet **cloth** with pins and collisions.
+- **Graph editor** for animation curves (drag keys in time × value, per-key easing).

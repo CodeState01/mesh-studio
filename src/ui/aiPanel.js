@@ -1,5 +1,6 @@
-// Painel do assistente de IA (as configurações ficam na página Configurações).
+// Assistente de IA (painel flutuante). Seletor de provedor com logos e busca.
 import { PROVIDERS, getProvider } from '../ai/providers.js';
+import { providerLogo } from '../ai/logos.js';
 import { listModels } from '../ai/client.js';
 import { runAgent, stopAgent, resetConversation } from '../ai/agent.js';
 import { bus } from '../core/state.js';
@@ -23,7 +24,8 @@ let busy = false;
 
 export function initAIPanel() {
   setCursorCount(settings.prefs.cursors); cursorConfig.speed = settings.prefs.cursorSpeed;
-  $('#ai-actions').innerHTML = `<button data-a="new" title="Nova conversa">${icon('plus', 15)}</button><button data-a="settings" title="Configurar IA">${icon('gear', 15)}</button><button data-a="close" title="Fechar (Ctrl+.)">✕</button>`;
+  $('.ai-title').innerHTML = `${icon('bot', 17)}Assistente`;
+  $('#ai-actions').innerHTML = `<button data-a="new" data-tip="Nova conversa">${icon('plus', 16)}</button><button data-a="settings" data-tip="Configurar IA">${icon('gear', 16)}</button><button data-a="close" data-tip="Fechar (Ctrl+.)">${icon('close', 16)}</button>`;
   $('#ai-actions').onclick = (e) => {
     const a = e.target.closest('[data-a]')?.dataset.a;
     if (a === 'settings') openSettings('ai'); if (a === 'new') resetConversation(); if (a === 'close') bus.emit('cmd', 'toggle-ai');
@@ -64,28 +66,27 @@ function addMsg(role, content) { const d = document.createElement('div'); d.clas
 function setBusy(b) {
   busy = b; const s = $('#ai-send');
   s.innerHTML = b ? `${icon('stop', 14)} Parar` : `Enviar ${icon('send', 14)}`;
-  s.classList.toggle('primary', !b);
 }
 
 function renderEmpty() {
   const p = getProvider(settings.provider);
-  $('#ai-log').innerHTML = `<div class="ai-empty"><b>O que vamos criar?</b>
-    ${p.format === 'demo' ? 'Modo demo: roda um roteiro offline para mostrar os cursores. <a href="#" data-cfg>Conectar uma IA</a> para pedidos livres.' : `Conectado a ${esc(p.name)}. Cada ação aparece com seu próprio cursor.`}
-    <button data-s='Crie uma intro de motion com o texto "ARGILA", partículas mágicas e um whoosh'>Intro de motion com texto 3D</button>
-    <button data-s="Monte uma cena de produto: pedestal de mármore, uma esfera metálica, luz de recorte e câmera">Cena de produto</button>
-    <button data-s="Crie 5 cubos em arco, cada um com uma cor e animação de quicar defasada">Cubos animados em arco</button></div>`;
+  $('#ai-log').innerHTML = `<div class="ai-empty"><b>${providerLogo(p, 24)} O que vamos criar?</b>
+    ${p.format === 'demo' ? 'Modo demo: roteiro offline que mostra os cursores. <a href="#" data-cfg>Conecte uma IA</a> para pedidos livres.' : `Conectado a ${esc(p.name)}. Cada ação aparece com seu próprio cursor.`}
+    <button data-s='Crie uma intro de motion com o texto "ARGILA", partículas mágicas e um whoosh'>${icon('sparkle', 16)} Intro de motion com texto 3D</button>
+    <button data-s="Monte uma cena de produto: pedestal de mármore, uma esfera metálica, luz de recorte e câmera">${icon('camera', 16)} Cena de produto</button>
+    <button data-s="Crie 5 cubos em arco, cada um com uma cor e animação de quicar defasada">${icon('cube', 16)} Cubos animados em arco</button></div>`;
   $('#ai-log').onclick = (e) => {
     if (e.target.closest('[data-cfg]')) { e.preventDefault(); openSettings('ai'); return; }
     const b = e.target.closest('[data-s]'); if (b) { $('#ai-input').value = b.dataset.s; $('#ai-form').requestSubmit(); }
   };
 }
 
+// Seletor de provedor com logos (popover pesquisável)
 function renderProviderBar() {
   const p = getProvider(settings.provider);
-  const g = { Offline: PROVIDERS.filter((x) => x.format === 'demo'), Locais: PROVIDERS.filter((x) => x.local && x.format !== 'demo'), Nuvem: PROVIDERS.filter((x) => !x.local) };
-  $('#ai-provider').innerHTML = `<select class="field" id="prov-sel">${Object.entries(g).map(([n, list]) => `<optgroup label="${n}">${list.map((x) => `<option value="${x.id}" ${x.id === p.id ? 'selected' : ''}>${esc(x.name)}${settings.keys[x.id] ? ' ✓' : ''}</option>`).join('')}</optgroup>`).join('')}</select>
-    <input class="field" id="model-in" value="${esc(cfg().model)}" placeholder="modelo" list="model-list"><datalist id="model-list"></datalist>`;
-  $('#prov-sel').onchange = (e) => { settings.provider = e.target.value; saveSettings(); renderEmpty(); };
+  $('#ai-provider').innerHTML = `<button class="prov-picker" id="prov-btn">${providerLogo(p, 22)}<span>${esc(p.name)}</span>${icon('chevron', 14)}</button>
+    <input class="field" id="model-in" value="${esc(cfg().model)}" placeholder="modelo" list="model-list" style="height:34px"><datalist id="model-list"></datalist>`;
+  $('#prov-btn').onclick = (e) => openProviderPicker(e.currentTarget);
   const mi = $('#model-in');
   mi.onkeydown = (e) => e.stopPropagation();
   mi.onchange = () => { settings.models[settings.provider] = mi.value.trim(); saveSettings(); };
@@ -95,9 +96,26 @@ function renderProviderBar() {
   };
 }
 
+function openProviderPicker(anchor) {
+  document.querySelector('.menu-pop.pb-pop')?.remove();
+  const pop = document.createElement('div'); pop.className = 'menu-pop pb-pop'; pop.style.width = '300px';
+  const r = anchor.getBoundingClientRect(); pop.style.left = Math.max(8, r.right - 300) + 'px'; pop.style.top = r.bottom + 6 + 'px';
+  let q = '';
+  const draw = () => {
+    const match = (x) => x.name.toLowerCase().includes(q);
+    const groups = [['Offline', PROVIDERS.filter((x) => x.format === 'demo')], ['Locais (no seu PC)', PROVIDERS.filter((x) => x.local && x.format !== 'demo')], ['Nuvem', PROVIDERS.filter((x) => !x.local)]];
+    pop.querySelector('.pp-list').innerHTML = groups.map(([n, list]) => { const l = list.filter(match); return l.length ? `<div class="sub-h">${n}</div>${l.map((x) => `<button data-p="${x.id}">${providerLogo(x, 22)}<span>${esc(x.name)}</span>${x.id === settings.provider ? icon('check', 15) : settings.keys[x.id] ? '<kbd>chave</kbd>' : ''}</button>`).join('')}` : ''; }).join('') || '<div class="empty">Nada encontrado</div>';
+  };
+  pop.innerHTML = `<label class="search">${icon('search', 15)}<input placeholder="Buscar provedor…"></label><div class="pp-list" style="max-height:52vh;overflow:auto"></div>`;
+  document.body.appendChild(pop); draw();
+  const inp = pop.querySelector('input'); inp.focus(); inp.onkeydown = (e) => { e.stopPropagation(); if (e.key === 'Escape') pop.remove(); }; inp.oninput = () => { q = inp.value.toLowerCase(); draw(); };
+  pop.onclick = (e) => { const b = e.target.closest('[data-p]'); if (!b) return; settings.provider = b.dataset.p; saveSettings(); pop.remove(); renderEmpty(); };
+  setTimeout(() => document.addEventListener('pointerdown', function off(ev) { if (!pop.contains(ev.target)) { pop.remove(); document.removeEventListener('pointerdown', off); } }), 0);
+}
+
 function renderCursorCtl() {
   const el = $('#ai-cursors-ctl');
-  el.innerHTML = `Cursores <button data-d="-1">−</button><b>${settings.prefs.cursors}</b><button data-d="1">+</button>`;
+  el.innerHTML = `${icon('select', 14)} <button data-d="-1">−</button><b>${settings.prefs.cursors}</b><button data-d="1">+</button>`;
   el.onclick = (e) => {
     const d = +e.target.closest('[data-d]')?.dataset.d; if (!d) return;
     settings.prefs.cursors = Math.max(1, Math.min(8, settings.prefs.cursors + d)); setCursorCount(settings.prefs.cursors); saveSettings();

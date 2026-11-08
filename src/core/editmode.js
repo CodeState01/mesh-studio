@@ -1,218 +1,329 @@
-// Modo de Edição (Tab): seleção de VÉRTICES ou FACES, mover, EXTRUDAR (E) e excluir faces.
-// A malha é trabalhada como "não indexada" (cada triângulo com seus 3 vértices);
-// vértices na mesma posição formam um "grupo" e se movem juntos — a malha não rasga.
+// Modo de Edição (Tab) sobre EditMesh: vértice / aresta / face, loops, seleção por retângulo,
+// edição proporcional e operações (extrudar, inset, bevel, loop cut, merge, conectar, preencher…).
+// Toda operação abre o painel "Ajustar última operação" com valores exatos.
 import * as THREE from 'three';
-import { state, bus, select } from './state.js';
-import { gizmo, pickAt } from './viewport.js';
+import { state, bus, select, precision } from './state.js';
+import { gizmo, renderer, camera, getRenderCamera, scene, orbit, pickAt } from './viewport.js';
+import { registerEditTransform } from './precision.js';
+import { EditMesh } from './editmesh.js';
 import { history } from './history.js';
 import { toast } from '../ui/toast.js';
 
-let mesh = null, points = null, overlay = null, handle = null;
-let groups = [], vToGroup = null;             // grupo = vértices coincidentes
-const selected = new Set();                    // ids de grupos selecionados
-const faces = new Set();                       // índices de triângulos selecionados (modo face)
-let before = null, last = null;
-export const edit = { select: 'vertex' };      // 'vertex' | 'face'
+const ek = (a, b) => (a < b ? a + '_' + b : b + '_' + a);
+export const edit = { select: 'vertex', mesh: null, em: null, lastOp: null };
+const sel = { verts: new Set(), edges: new Set(), faces: new Set() };
+let overlay = null, handle = null;
+const C_SEL = new THREE.Color('#ff8a4c'), C_VERT = new THREE.Color('#15161a'), C_EDGE = new THREE.Color('#0d0e10');
 
-const key = (p, i) => `${p.getX(i).toFixed(4)},${p.getY(i).toFixed(4)},${p.getZ(i).toFixed(4)}`;
+const cam = () => getRenderCamera() || camera;
+function screenOf(v) {
+  const r = renderer.domElement.getBoundingClientRect(); const p = v.clone().project(cam());
+  return { x: r.left + ((p.x + 1) / 2) * r.width, y: r.top + ((1 - p.y) / 2) * r.height, z: p.z };
+}
+const world = (i) => edit.em.verts[i].clone().applyMatrix4(edit.mesh.matrixWorld);
 
+// ---------- Entrar / sair ----------
 export function toggleEditMode() {
   if (state.mode === 'edit') exitEdit();
-  else if (state.selected?.isMesh && !state.selected.userData.vfx) enterEdit(state.selected);
+  else if (state.selected?.isMesh && !state.selected.userData.vfx && !state.selected.isSkinnedMesh) enterEdit(state.selected);
   else toast('Selecione uma malha para editar');
 }
 
 function enterEdit(m) {
-  mesh = m; state.mode = 'edit';
-  if (m.geometry.index) { // trabalha em não-indexado (sem mudança visual)
-    const old = m.geometry, g = old.toNonIndexed(); m.geometry = g;
-    history.push({ label: 'Preparar edição', undo: () => (m.geometry = old), redo: () => (m.geometry = g) });
-  }
-  handle = new THREE.Object3D(); m.add(handle);
-  rebuild(); gizmo.detach(); selected.clear(); faces.clear();
-  bus.emit('mode', 'edit');
+  edit.mesh = m; state.mode = 'edit';
+  edit.em = m.__em || EditMesh.fromGeometry(m.geometry);
+  if (m.__em === undefined) edit.em.smooth = m.userData.smooth ?? detectSmooth(m.geometry);
+  m.__em = edit.em; sel.verts.clear(); sel.edges.clear(); sel.faces.clear();
+  // Empurra a superfície um pouco para trás: as arestas desenhadas por cima não "tremem" (z-fighting)
+  m.material.polygonOffset = true; m.material.polygonOffsetFactor = 1; m.material.polygonOffsetUnits = 1; m.material.needsUpdate = true;
+  if (!handle) { handle = new THREE.Object3D(); handle.name = '__edithandle__'; scene.add(handle); }
+  sync(); gizmo.detach();
+  bus.emit('mode', 'edit'); bus.emit('edit:changed');
 }
 
 export function exitEdit() {
-  if (!mesh) return;
-  [points, overlay, handle].forEach((o) => o && mesh.remove(o));
-  points?.geometry.dispose(); overlay?.geometry.dispose();
-  const g = mesh.geometry; g.computeVertexNormals(); g.computeBoundingSphere(); g.computeBoundingBox();
-  const m = mesh; mesh = null; points = overlay = null; state.mode = 'object';
-  gizmo.detach(); select(m); bus.emit('mode', 'object');
+  if (!edit.mesh) return;
+  if (overlay) { edit.mesh.remove(overlay); overlay.traverse((o) => o.geometry?.dispose()); overlay = null; }
+  const m = edit.mesh; m.userData.smooth = edit.em.smooth;
+  m.material.polygonOffset = false; m.material.needsUpdate = true;
+  edit.mesh = null; edit.em = null; edit.lastOp = null; state.mode = 'object';
+  gizmo.detach(); select(m); bus.emit('mode', 'object'); bus.emit('edit:op', null);
 }
 
-// Reconstrói grupos de vértices + nuvem de pontos (após qualquer mudança topológica).
-function rebuild() {
-  const pos = mesh.geometry.attributes.position; const map = new Map(); groups = []; vToGroup = new Int32Array(pos.count);
-  for (let i = 0; i < pos.count; i++) {
-    const k = key(pos, i); if (!map.has(k)) { map.set(k, groups.length); groups.push([]); }
-    const gi = map.get(k); groups[gi].push(i); vToGroup[i] = gi;
+function detectSmooth(g) {
+  const n = g.attributes.normal, p = g.attributes.position; if (!n) return false;
+  const a = new THREE.Vector3(), b = new THREE.Vector3(), c = new THREE.Vector3(), fn = new THREE.Vector3(), vn = new THREE.Vector3();
+  const idx = (i) => (g.index ? g.index.getX(i) : i); let diff = 0, cnt = Math.min(60, (g.index ? g.index.count : p.count) / 3);
+  for (let t = 0; t < cnt; t++) {
+    a.fromBufferAttribute(p, idx(t * 3)); b.fromBufferAttribute(p, idx(t * 3 + 1)); c.fromBufferAttribute(p, idx(t * 3 + 2));
+    fn.subVectors(c, b).cross(a.clone().sub(b)).normalize(); vn.fromBufferAttribute(n, idx(t * 3));
+    if (vn.dot(fn) < 0.995) diff++;
   }
-  if (points) { mesh.remove(points); points.geometry.dispose(); }
-  const g = new THREE.BufferGeometry();
-  const arr = new Float32Array(groups.length * 3), col = new Float32Array(groups.length * 3);
-  groups.forEach((gr, i) => arr.set([pos.getX(gr[0]), pos.getY(gr[0]), pos.getZ(gr[0])], i * 3));
-  g.setAttribute('position', new THREE.BufferAttribute(arr, 3));
-  g.setAttribute('color', new THREE.BufferAttribute(col, 3));
-  points = new THREE.Points(g, new THREE.PointsMaterial({ size: 7, sizeAttenuation: false, vertexColors: true, depthTest: false }));
-  points.renderOrder = 999; points.userData.editHelper = true; points.visible = edit.select === 'vertex';
-  mesh.add(points); refresh();
+  return diff > cnt * 0.3;
 }
 
-function refresh() {
-  if (!points) return;
-  const c = points.geometry.attributes.color;
-  for (let i = 0; i < groups.length; i++) { const s = selected.has(i); c.setXYZ(i, s ? 1 : 0.1, s ? 0.48 : 0.1, s ? 0.27 : 0.12); }
-  c.needsUpdate = true; points.visible = edit.select === 'vertex';
-  drawOverlay(); placeHandle();
+// ---------- Sincronização malha ↔ geometria ↔ overlay ----------
+function sync(topology = true) {
+  const m = edit.mesh, em = edit.em; if (!m) return;
+  m.geometry.dispose(); m.geometry = em.toGeometry();
+  if (topology || !overlay) buildOverlay(); else updateOverlayPositions();
+  recolor();
 }
 
-function drawOverlay() {
-  if (overlay) { mesh.remove(overlay); overlay.geometry.dispose(); overlay = null; }
-  if (edit.select !== 'face' || !faces.size) return;
-  const pos = mesh.geometry.attributes.position; const arr = [];
-  faces.forEach((t) => { for (let k = 0; k < 3; k++) arr.push(pos.getX(t * 3 + k), pos.getY(t * 3 + k), pos.getZ(t * 3 + k)); });
-  const g = new THREE.BufferGeometry(); g.setAttribute('position', new THREE.Float32BufferAttribute(arr, 3));
-  overlay = new THREE.Mesh(g, new THREE.MeshBasicMaterial({ color: '#e2703f', transparent: true, opacity: 0.45, side: THREE.DoubleSide, polygonOffset: true, polygonOffsetFactor: -2, depthWrite: false }));
-  overlay.userData.editHelper = true; overlay.raycast = () => {}; mesh.add(overlay);
+function buildOverlay() {
+  const m = edit.mesh, em = edit.em;
+  if (overlay) { m.remove(overlay); overlay.traverse((o) => o.geometry?.dispose()); }
+  overlay = new THREE.Group(); overlay.userData.editHelper = true;
+  const vp = new Float32Array(em.verts.length * 3), vc = new Float32Array(em.verts.length * 3);
+  const pts = new THREE.Points(new THREE.BufferGeometry(), new THREE.PointsMaterial({ size: 6, sizeAttenuation: false, vertexColors: true, depthTest: false, transparent: true }));
+  pts.geometry.setAttribute('position', new THREE.BufferAttribute(vp, 3)); pts.geometry.setAttribute('color', new THREE.BufferAttribute(vc, 3));
+  const edges = em.edges(); edit.edgeList = edges;
+  const lines = new THREE.LineSegments(new THREE.BufferGeometry(), new THREE.LineBasicMaterial({ vertexColors: true, transparent: true, opacity: 0.9, depthTest: true }));
+  lines.geometry.setAttribute('position', new THREE.BufferAttribute(new Float32Array(edges.length * 6), 3));
+  lines.geometry.setAttribute('color', new THREE.BufferAttribute(new Float32Array(edges.length * 6), 3));
+  const faces = new THREE.Mesh(new THREE.BufferGeometry(), new THREE.MeshBasicMaterial({ color: '#ff8a4c', transparent: true, opacity: 0.32, side: THREE.DoubleSide, depthWrite: false, polygonOffset: true, polygonOffsetFactor: -2 }));
+  [pts, lines, faces].forEach((o) => { o.renderOrder = 990; o.userData.editHelper = true; o.raycast = () => {}; });
+  pts.renderOrder = 999;
+  overlay.add(faces, lines, pts); overlay.points = pts; overlay.lines = lines; overlay.faces = faces;
+  m.add(overlay); updateOverlayPositions();
+}
+
+function updateOverlayPositions() {
+  const em = edit.em; const vp = overlay.points.geometry.attributes.position;
+  em.verts.forEach((v, i) => vp.setXYZ(i, v.x, v.y, v.z)); vp.needsUpdate = true;
+  const lp = overlay.lines.geometry.attributes.position;
+  edit.edgeList.forEach(([a, b], i) => { const A = em.verts[a], B = em.verts[b]; lp.setXYZ(i * 2, A.x, A.y, A.z); lp.setXYZ(i * 2 + 1, B.x, B.y, B.z); });
+  lp.needsUpdate = true; overlay.points.geometry.computeBoundingSphere(); overlay.lines.geometry.computeBoundingSphere();
+  drawSelectedFaces();
+}
+
+function drawSelectedFaces() {
+  const em = edit.em; const arr = [];
+  if (edit.select === 'face') for (const fi of sel.faces) { const f = em.faces[fi]; if (!f) continue; for (let i = 1; i < f.length - 1; i++) for (const v of [f[0], f[i], f[i + 1]]) arr.push(em.verts[v].x, em.verts[v].y, em.verts[v].z); }
+  overlay.faces.geometry.setAttribute('position', new THREE.Float32BufferAttribute(arr, 3));
+}
+
+function derivedVerts() {
+  if (edit.select === 'vertex') return new Set(sel.verts);
+  const s = new Set();
+  if (edit.select === 'edge') sel.edges.forEach((k) => k.split('_').forEach((v) => s.add(+v)));
+  else sel.faces.forEach((fi) => edit.em.faces[fi]?.forEach((v) => s.add(v)));
+  return s;
+}
+function selectedEdgeKeys() {
+  if (edit.select === 'edge') return [...sel.edges];
+  const vs = derivedVerts(); return edit.edgeList.filter(([a, b]) => vs.has(a) && vs.has(b)).map(([a, b]) => ek(a, b));
+}
+
+function recolor() {
+  if (!overlay) return;
+  const vs = derivedVerts(); const vc = overlay.points.geometry.attributes.color;
+  for (let i = 0; i < edit.em.verts.length; i++) { const c = vs.has(i) ? C_SEL : C_VERT; vc.setXYZ(i, c.r, c.g, c.b); }
+  vc.needsUpdate = true; overlay.points.visible = edit.select === 'vertex' || vs.size > 0;
+  const lc = overlay.lines.geometry.attributes.color; const es = new Set(selectedEdgeKeys());
+  edit.edgeList.forEach(([a, b], i) => { const c = es.has(ek(a, b)) ? C_SEL : C_EDGE; lc.setXYZ(i * 2, c.r, c.g, c.b); lc.setXYZ(i * 2 + 1, c.r, c.g, c.b); });
+  lc.needsUpdate = true; drawSelectedFaces(); placeHandle();
+  bus.emit('edit:selection', { verts: vs.size, edges: es.size, faces: sel.faces.size });
 }
 
 function placeHandle() {
-  if (!selected.size) { gizmo.detach(); return; }
-  const p = points.geometry.attributes.position; const c = new THREE.Vector3();
-  selected.forEach((i) => c.add(new THREE.Vector3().fromBufferAttribute(p, i)));
-  handle.position.copy(c.divideScalar(selected.size));
-  gizmo.setMode('translate'); gizmo.attach(handle);
+  const vs = derivedVerts(); if (!vs.size || state.tool === 'select') { gizmo.detach(); return; }
+  const c = new THREE.Vector3(); vs.forEach((i) => c.add(world(i))); handle.position.copy(c.divideScalar(vs.size));
+  handle.quaternion.identity(); handle.scale.set(1, 1, 1); handle.updateMatrixWorld(true);
+  gizmo.attach(handle);
 }
 
-function syncSelectionFromFaces() {
-  selected.clear(); faces.forEach((t) => { for (let k = 0; k < 3; k++) selected.add(vToGroup[t * 3 + k]); });
+// ---------- Seleção ----------
+function nearestVertex(x, y, maxPx = 14) {
+  let best = -1, bd = maxPx; edit.mesh.updateMatrixWorld();
+  edit.em.verts.forEach((_, i) => { const s = screenOf(world(i)); if (s.z > 1) return; const d = Math.hypot(s.x - x, s.y - y); if (d < bd) { bd = d; best = i; } });
+  return best;
 }
-
-// Seleção de face: o triângulo clicado + vizinhos coplanares (ex.: o lado inteiro de um cubo).
-function triNormal(pos, t, out = new THREE.Vector3()) {
-  const a = new THREE.Vector3().fromBufferAttribute(pos, t * 3), b = new THREE.Vector3().fromBufferAttribute(pos, t * 3 + 1), c = new THREE.Vector3().fromBufferAttribute(pos, t * 3 + 2);
-  return out.subVectors(c, b).cross(new THREE.Vector3().subVectors(a, b)).normalize();
-}
-function coplanarRegion(t0) {
-  const pos = mesh.geometry.attributes.position; const tris = pos.count / 3;
-  const n0 = triNormal(pos, t0); const p0 = new THREE.Vector3().fromBufferAttribute(pos, t0 * 3);
-  const edgeMap = new Map(); // aresta (grupos ordenados) -> triângulos
-  for (let t = 0; t < tris; t++) for (let k = 0; k < 3; k++) {
-    const a = vToGroup[t * 3 + k], b = vToGroup[t * 3 + ((k + 1) % 3)]; const e = a < b ? a + '_' + b : b + '_' + a;
-    (edgeMap.get(e) || edgeMap.set(e, []).get(e)).push(t);
+function nearestEdge(x, y, maxPx = 10) {
+  let best = null, bd = maxPx;
+  for (const [a, b] of edit.edgeList) {
+    const A = screenOf(world(a)), B = screenOf(world(b)); const dx = B.x - A.x, dy = B.y - A.y; const L = dx * dx + dy * dy || 1;
+    const t = Math.max(0, Math.min(1, ((x - A.x) * dx + (y - A.y) * dy) / L)); const d = Math.hypot(A.x + dx * t - x, A.y + dy * t - y);
+    if (d < bd) { bd = d; best = [a, b]; }
   }
-  const region = new Set([t0]); const queue = [t0]; const n = new THREE.Vector3(), v = new THREE.Vector3();
-  while (queue.length) {
-    const t = queue.pop();
-    for (let k = 0; k < 3; k++) {
-      const a = vToGroup[t * 3 + k], b = vToGroup[t * 3 + ((k + 1) % 3)]; const e = a < b ? a + '_' + b : b + '_' + a;
-      for (const u of edgeMap.get(e)) {
-        if (region.has(u)) continue;
-        if (triNormal(pos, u, n).dot(n0) < 0.999) continue;
-        if (Math.abs(v.fromBufferAttribute(pos, u * 3).sub(p0).dot(n0)) > 1e-4) continue;
-        region.add(u); queue.push(u);
-      }
-    }
-  }
-  return region;
+  return best;
 }
+function faceAt(x, y) { const h = pickAt(x, y, [edit.mesh]).find((h) => h.object === edit.mesh); return h ? edit.em.triToFace[h.faceIndex] : -1; }
 
 bus.on('edit:click', (e) => {
-  if (!mesh) return;
-  if (edit.select === 'vertex') {
-    const hit = pickAt(e.clientX, e.clientY, [points])[0];
-    if (!e.shiftKey) selected.clear();
-    if (hit) { const i = hit.index; if (selected.has(i) && e.shiftKey) selected.delete(i); else selected.add(i); }
+  if (!edit.mesh) return;
+  const add = e.shiftKey; const set = edit.select === 'vertex' ? sel.verts : edit.select === 'edge' ? sel.edges : sel.faces;
+  if (!add) { sel.verts.clear(); sel.edges.clear(); sel.faces.clear(); }
+  if (e.altKey && edit.select !== 'face') { // loop de arestas
+    const ed = nearestEdge(e.clientX, e.clientY, 14); if (ed) edit.em.edgeLoop(...ed).forEach((k) => (edit.select === 'edge' ? sel.edges.add(k) : k.split('_').forEach((v) => sel.verts.add(+v))));
   } else {
-    const hit = pickAt(e.clientX, e.clientY, [mesh]).find((h) => h.object === mesh);
-    if (!e.shiftKey) faces.clear();
-    if (hit) { const reg = coplanarRegion(hit.faceIndex); const all = [...reg].every((t) => faces.has(t)); reg.forEach((t) => (all && e.shiftKey ? faces.delete(t) : faces.add(t))); }
-    syncSelectionFromFaces();
+    let item = null;
+    if (edit.select === 'vertex') { const v = nearestVertex(e.clientX, e.clientY); if (v >= 0) item = v; }
+    else if (edit.select === 'edge') { const ed = nearestEdge(e.clientX, e.clientY); if (ed) item = ek(...ed); }
+    else { const f = faceAt(e.clientX, e.clientY); if (f >= 0) item = f; }
+    if (item !== null) { if (add && set.has(item)) set.delete(item); else set.add(item); }
   }
-  refresh();
+  recolor();
 });
 
-export function setSelectMode(m) { edit.select = m; selected.clear(); faces.clear(); refresh(); bus.emit('edit:select-mode', m); }
+// Seleção por retângulo (arrastar no vazio)
+function setupRectSelect() {
+  const el = renderer.domElement; let start = null, box = null;
+  el.addEventListener('pointerdown', (e) => {
+    if (state.mode !== 'edit' || e.button !== 0 || e.altKey || gizmo.dragging || gizmo.axis) return;
+    start = { x: e.clientX, y: e.clientY, shift: e.shiftKey };
+  });
+  window.addEventListener('pointermove', (e) => {
+    if (!start) return; const w = e.clientX - start.x, h = e.clientY - start.y;
+    if (!box && Math.hypot(w, h) < 6) return;
+    if (!box) { box = document.createElement('div'); box.className = 'rect-select'; document.body.appendChild(box); orbit.enabled = false; }
+    Object.assign(box.style, { left: Math.min(start.x, e.clientX) + 'px', top: Math.min(start.y, e.clientY) + 'px', width: Math.abs(w) + 'px', height: Math.abs(h) + 'px' });
+  });
+  window.addEventListener('pointerup', (e) => {
+    if (!start) return; const s = start; start = null; if (!box) return;
+    box.remove(); box = null; orbit.enabled = true;
+    const x0 = Math.min(s.x, e.clientX), x1 = Math.max(s.x, e.clientX), y0 = Math.min(s.y, e.clientY), y1 = Math.max(s.y, e.clientY);
+    const inside = (p) => p.x >= x0 && p.x <= x1 && p.y >= y0 && p.y <= y1 && p.z < 1;
+    if (!s.shift) { sel.verts.clear(); sel.edges.clear(); sel.faces.clear(); }
+    const em = edit.em; const vin = em.verts.map((_, i) => inside(screenOf(world(i))));
+    if (edit.select === 'vertex') vin.forEach((v, i) => v && sel.verts.add(i));
+    else if (edit.select === 'edge') edit.edgeList.forEach(([a, b]) => vin[a] && vin[b] && sel.edges.add(ek(a, b)));
+    else em.faces.forEach((f, fi) => f.every((v) => vin[v]) && sel.faces.add(fi));
+    recolor();
+  });
+}
 
+export function setSelectMode(m) {
+  const vs = derivedVerts(); edit.select = m;
+  // converte a seleção atual para o novo modo
+  sel.verts = m === 'vertex' ? vs : new Set(); sel.edges.clear(); sel.faces.clear();
+  if (m === 'edge') edit.edgeList.forEach(([a, b]) => vs.has(a) && vs.has(b) && sel.edges.add(ek(a, b)));
+  if (m === 'face') edit.em.faces.forEach((f, fi) => f.every((v) => vs.has(v)) && sel.faces.add(fi));
+  recolor(); bus.emit('edit:select-mode', m);
+}
 export function selectAllVerts() {
-  if (!points) return;
-  if (edit.select === 'face') { const n = mesh.geometry.attributes.position.count / 3; if (faces.size === n) faces.clear(); else for (let t = 0; t < n; t++) faces.add(t); syncSelectionFromFaces(); }
-  else if (selected.size === groups.length) selected.clear(); else groups.forEach((_, i) => selected.add(i));
-  refresh();
+  const all = derivedVerts().size === edit.em.verts.length;
+  sel.verts.clear(); sel.edges.clear(); sel.faces.clear();
+  if (!all) { if (edit.select === 'vertex') edit.em.verts.forEach((_, i) => sel.verts.add(i)); else if (edit.select === 'edge') edit.edgeList.forEach(([a, b]) => sel.edges.add(ek(a, b))); else edit.em.faces.forEach((_, i) => sel.faces.add(i)); }
+  recolor();
+}
+export function invertSelection() {
+  if (edit.select === 'vertex') { const s = new Set(); edit.em.verts.forEach((_, i) => !sel.verts.has(i) && s.add(i)); sel.verts = s; }
+  else if (edit.select === 'edge') { const s = new Set(); edit.edgeList.forEach(([a, b]) => !sel.edges.has(ek(a, b)) && s.add(ek(a, b))); sel.edges = s; }
+  else { const s = new Set(); edit.em.faces.forEach((_, i) => !sel.faces.has(i) && s.add(i)); sel.faces = s; }
+  recolor();
+}
+export function selectLinked() {
+  const em = edit.em; const vf = em.vertFaces(); const seen = new Set(derivedVerts()); const queue = [...seen];
+  while (queue.length) { const v = queue.pop(); for (const fi of vf[v]) for (const w of em.faces[fi]) if (!seen.has(w)) { seen.add(w); queue.push(w); } }
+  sel.verts = seen; const m = edit.select; edit.select = 'vertex'; setSelectMode(m);
 }
 
-// ---------- Extrudar ----------
-export function extrude(distance = 0.3) {
-  if (!mesh || edit.select !== 'face' || !faces.size) { toast('Modo Face: selecione faces para extrudar (E)'); return; }
-  const old = mesh.geometry; const pos = old.attributes.position, uv = old.attributes.uv;
-  // Arestas de contorno = arestas usadas por apenas 1 face selecionada
-  const count = new Map(), dir = new Map();
-  faces.forEach((t) => { for (let k = 0; k < 3; k++) {
-    const ia = t * 3 + k, ib = t * 3 + ((k + 1) % 3); const a = vToGroup[ia], b = vToGroup[ib];
-    const e = a < b ? a + '_' + b : b + '_' + a; count.set(e, (count.get(e) || 0) + 1); dir.set(e, [ia, ib]);
-  } });
-  const n = new THREE.Vector3(); faces.forEach((t) => n.add(triNormal(pos, t))); n.normalize();
-  const d = n.multiplyScalar(distance);
-  const P = Array.from(pos.array), U = uv ? Array.from(uv.array) : null;
-  const pa = new THREE.Vector3(), pb = new THREE.Vector3();
-  for (const [e, c] of count) {
-    if (c !== 1) continue; const [ia, ib] = dir.get(e);
-    pa.fromBufferAttribute(pos, ia); pb.fromBufferAttribute(pos, ib);
-    const pa2 = pa.clone().add(d), pb2 = pb.clone().add(d);
-    // Parede lateral (2 triângulos) com a orientação voltada para fora
-    P.push(...pa.toArray(), ...pb.toArray(), ...pb2.toArray(), ...pa.toArray(), ...pb2.toArray(), ...pa2.toArray());
-    if (U) U.push(0, 0, 1, 0, 1, 1, 0, 0, 1, 1, 0, 1);
+// ---------- Transformação (gizmo e modal G/R/S) com edição proporcional ----------
+function beginTransform() {
+  const em = edit.em; const vs = [...derivedVerts()]; if (!vs.length) return null;
+  const inv = edit.mesh.matrixWorld.clone().invert(); const before = em.clone();
+  const startW = em.verts.map((_, i) => world(i));
+  const weights = new Map(vs.map((v) => [v, 1]));
+  if (precision.proportional) {
+    const R = precision.propRadius; const fall = { linear: (t) => t, sharp: (t) => t * t, sphere: (t) => Math.sqrt(1 - (1 - t) * (1 - t)), smooth: (t) => t * t * (3 - 2 * t) }[precision.propFalloff] || ((t) => t);
+    startW.forEach((p, i) => { if (weights.has(i)) return; let d = Infinity; for (const v of vs) d = Math.min(d, p.distanceTo(startW[v])); if (d < R) weights.set(i, fall(1 - d / R)); });
   }
-  faces.forEach((t) => { for (let k = 0; k < 3; k++) { const i = (t * 3 + k) * 3; P[i] += d.x; P[i + 1] += d.y; P[i + 2] += d.z; } });
-  const g = new THREE.BufferGeometry();
-  g.setAttribute('position', new THREE.Float32BufferAttribute(P, 3));
-  if (U) g.setAttribute('uv', new THREE.Float32BufferAttribute(U, 2));
-  g.computeVertexNormals();
-  mesh.geometry = g; const m = mesh;
-  history.push({ label: 'Extrudar', undo: () => { m.geometry = old; if (mesh === m) rebuild(); }, redo: () => { m.geometry = g; if (mesh === m) rebuild(); } });
-  rebuild(); syncSelectionFromFaces(); refresh();
-  gizmo.showX = gizmo.showY = gizmo.showZ = true;
-  toast('Extrudado — arraste a seta para ajustar');
+  return {
+    points: vs.map((v) => startW[v].clone()),
+    applyMatrix(T) {
+      for (const [i, w] of weights) { const p = startW[i].clone(); const q = p.clone().applyMatrix4(T); em.verts[i].copy(p.lerp(q, w).applyMatrix4(inv)); }
+      edit.mesh.geometry.dispose(); edit.mesh.geometry = em.toGeometry(); updateOverlayPositions();
+    },
+    commit(label) { pushOp(label, before, em.clone()); placeHandle(); },
+    cancel() { em.verts.forEach((v, i) => v.copy(before.verts[i])); sync(false); },
+  };
 }
+registerEditTransform({ begin: () => (state.mode === 'edit' ? beginTransform() : null) });
 
-export function deleteFaces() {
-  if (!mesh || edit.select !== 'face' || !faces.size) return;
-  const old = mesh.geometry; const keep = [];
-  for (let t = 0; t < old.attributes.position.count / 3; t++) if (!faces.has(t)) keep.push(t);
-  const g = new THREE.BufferGeometry();
-  for (const [name, a] of Object.entries(old.attributes)) {
-    const out = new Float32Array(keep.length * 3 * a.itemSize);
-    keep.forEach((t, j) => out.set(a.array.subarray(t * 3 * a.itemSize, (t + 1) * 3 * a.itemSize), j * 3 * a.itemSize));
-    g.setAttribute(name, new THREE.BufferAttribute(out, a.itemSize));
-  }
-  const m = mesh; mesh.geometry = g; faces.clear(); selected.clear();
-  history.push({ label: 'Excluir faces', undo: () => { m.geometry = old; if (mesh === m) rebuild(); }, redo: () => { m.geometry = g; if (mesh === m) rebuild(); } });
-  rebuild();
-}
-
-// O gizmo é criado em initViewport(); por isso os ganchos são ligados depois.
 export function bindEditGizmo() {
+  let tr = null, inv0 = null;
   gizmo.addEventListener('dragging-changed', (e) => {
-    if (state.mode !== 'edit' || !mesh) return;
-    if (e.value) { before = mesh.geometry.attributes.position.array.slice(); last = handle.position.clone(); }
-    else if (before) {
-      const geo = mesh.geometry, b = before, a = geo.attributes.position.array.slice(); before = null;
-      const apply = (src) => { geo.attributes.position.array.set(src); geo.attributes.position.needsUpdate = true; geo.computeVertexNormals(); };
-      history.push({ label: 'Mover seleção', undo: () => apply(b), redo: () => apply(a) });
-      drawOverlay();
-    }
+    if (state.mode !== 'edit' || gizmo.object !== handle) return;
+    if (e.value) { tr = beginTransform(); handle.updateMatrixWorld(true); inv0 = handle.matrixWorld.clone().invert(); }
+    else if (tr) { tr.commit('Mover seleção'); tr = null; }
   });
   gizmo.addEventListener('objectChange', () => {
-    if (state.mode !== 'edit' || !mesh || !last) return;
-    const d = handle.position.clone().sub(last); last.copy(handle.position);
-    const pos = mesh.geometry.attributes.position, pp = points.geometry.attributes.position;
-    selected.forEach((gi) => {
-      pp.setXYZ(gi, pp.getX(gi) + d.x, pp.getY(gi) + d.y, pp.getZ(gi) + d.z);
-      for (const vi of groups[gi]) pos.setXYZ(vi, pos.getX(vi) + d.x, pos.getY(vi) + d.y, pos.getZ(vi) + d.z);
-    });
-    pos.needsUpdate = true; pp.needsUpdate = true; mesh.geometry.computeVertexNormals();
-    if (overlay) drawOverlay();
+    if (state.mode !== 'edit' || !tr) return;
+    handle.updateMatrixWorld(true); tr.applyMatrix(handle.matrixWorld.clone().multiply(inv0));
   });
+  setupRectSelect();
+  bus.on('tool', () => { if (state.mode === 'edit') placeHandle(); });
 }
+
+// ---------- Histórico + "ajustar última operação" ----------
+function pushOp(label, before, after) {
+  const m = edit.mesh;
+  const apply = (src) => { if (edit.mesh !== m) { m.__em = src.clone(); m.geometry = m.__em.toGeometry(); return; } edit.em.verts = src.clone().verts; Object.assign(edit.em, src.clone()); m.__em = edit.em; sync(true); };
+  history.push({ label, undo: () => apply(before), redo: () => apply(after) });
+}
+
+function runOp(name, label, params, fn, after) {
+  if (!edit.mesh) return;
+  const before = edit.em.clone(); const snapshot = { verts: new Set(sel.verts), edges: new Set(sel.edges), faces: new Set(sel.faces) };
+  const exec = (p) => {
+    Object.assign(edit.em, before.clone()); sel.verts = new Set(snapshot.verts); sel.edges = new Set(snapshot.edges); sel.faces = new Set(snapshot.faces);
+    const r = fn(edit.em, p); sync(true); after?.(r); return r;
+  };
+  const r = exec(params);
+  if (r === false) { toast(label + ': nada a fazer com esta seleção'); return; }
+  pushOp(label, before, edit.em.clone());
+  edit.lastOp = { name, label, params: { ...params }, rerun(p) { history.undo?.call(history); exec(p); pushOp(label, before, edit.em.clone()); edit.lastOp.params = { ...p }; } };
+  bus.emit('edit:op', edit.lastOp);
+}
+
+// ---------- Operações ----------
+const need = (n, what) => { if (n) return true; toast(`Selecione ${what}`); return false; };
+export const ops = {
+  extrude() {
+    if (edit.select !== 'face') { setSelectMode('face'); }
+    if (!need(sel.faces.size, 'faces (modo Face)')) return;
+    runOp('extrude', 'Extrudar', { distance: 0.3 }, (em, p) => { em.extrudeFaces(sel.faces, p.distance); });
+  },
+  inset() {
+    if (!need(edit.select === 'face' && sel.faces.size, 'faces (modo Face)')) return;
+    runOp('inset', 'Inset', { amount: 0.25 }, (em, p) => { em.insetFaces(sel.faces, p.amount); });
+  },
+  bevel() {
+    const keys = selectedEdgeKeys(); if (!need(keys.length, 'arestas')) return;
+    runOp('bevel', 'Bevel', { width: 0.1 }, (em, p) => { sel.verts.clear(); sel.edges.clear(); sel.faces.clear(); return em.bevelEdges(keys, p.width) || false; });
+  },
+  loopCut(mouse) {
+    let ed = null;
+    if (mouse) ed = nearestEdge(mouse.x, mouse.y, 40);
+    if (!ed) { const k = selectedEdgeKeys()[0]; if (k) ed = k.split('_').map(Number); }
+    if (!need(ed, 'uma aresta (ou aponte o mouse para ela)')) return;
+    runOp('loopcut', 'Loop Cut', { position: 0.5 }, (em, p) => em.loopCut(ed[0], ed[1], p.position) || false);
+  },
+  subdivide() {
+    if (!need(edit.select === 'face' && sel.faces.size, 'faces (modo Face)')) return;
+    runOp('subdivide', 'Subdividir', {}, (em) => { em.subdivideFaces(sel.faces); sel.faces.clear(); });
+  },
+  merge() { const vs = derivedVerts(); if (!need(vs.size > 1, '2+ vértices')) return; runOp('merge', 'Merge', {}, (em) => { em.mergeVerts(vs); sel.verts.clear(); sel.edges.clear(); sel.faces.clear(); }); },
+  connect() { const vs = [...derivedVerts()]; if (!need(vs.length === 2, 'exatamente 2 vértices da mesma face')) return; runOp('connect', 'Conectar', {}, (em) => em.connect(vs[0], vs[1])); },
+  fill() { const vs = derivedVerts(); if (!need(vs.size > 2, '3+ vértices')) return; runOp('fill', 'Preencher', {}, (em) => { em.fill(vs); }); },
+  flip() { if (!need(sel.faces.size, 'faces (modo Face)')) return; runOp('flip', 'Inverter normais', {}, (em) => { em.flipFaces(sel.faces); }); },
+  remove() {
+    runOp('delete', 'Excluir', {}, (em) => {
+      if (edit.select === 'face') { if (!sel.faces.size) return false; em.deleteFaces(sel.faces); }
+      else { const vs = derivedVerts(); if (!vs.size) return false; em.deleteVerts(vs); }
+      sel.verts.clear(); sel.edges.clear(); sel.faces.clear();
+    });
+  },
+  shade(smooth) { runOp('shade', smooth ? 'Suavizar' : 'Facetar', {}, (em) => { em.smooth = smooth; }); },
+};
+
+// Teclas do modo de edição (têm prioridade sobre os atalhos globais)
+export const EDIT_KEYS = {
+  '1': () => setSelectMode('vertex'), '2': () => setSelectMode('edge'), '3': () => setSelectMode('face'),
+  E: ops.extrude, I: ops.inset, 'Ctrl+B': ops.bevel, 'Ctrl+R': (m) => ops.loopCut(m), M: ops.merge, J: ops.connect, F: ops.fill,
+  X: ops.remove, Delete: ops.remove, A: selectAllVerts, 'Ctrl+I': invertSelection, L: selectLinked, 'Alt+N': ops.flip,
+};
+
+// Leitura (sem efeitos colaterais) das posições de mundo dos vértices selecionados — usada pelo painel.
+export function selectedPoints() { return edit.mesh ? [...derivedVerts()].map(world) : []; }

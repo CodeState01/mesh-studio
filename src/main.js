@@ -2,6 +2,8 @@
 import { initViewport, setTool, setShading, applyEnvironment, setGridVisible } from './core/viewport.js';
 import { bindEditGizmo } from './core/editmode.js';
 import { initSculpt } from './core/sculpt.js';
+import { initPrecision } from './core/precision.js';
+import { initPaint } from './core/uv.js';
 import { content, createPrimitive, createLight, createCamera, addToScene } from './core/objects.js';
 import { select, bus } from './core/state.js';
 import { loadSettings, applyUIPrefs, settings } from './core/settings.js';
@@ -25,6 +27,8 @@ async function boot() {
   initViewport($('#viewport'));
   bindEditGizmo();
   initSculpt();
+  initPrecision();
+  initPaint();
   initCursors(settings.prefs.cursors);
   initShell();
   initOutliner();

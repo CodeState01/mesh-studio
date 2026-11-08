@@ -11,7 +11,7 @@ import { OutlinePass } from 'three/addons/postprocessing/OutlinePass.js';
 import { OutputPass } from 'three/addons/postprocessing/OutputPass.js';
 import { RoomEnvironment } from 'three/addons/environments/RoomEnvironment.js';
 import { content, helpers, topLevel } from './objects.js';
-import { state, bus, select } from './state.js';
+import { state, bus, select, precision } from './state.js';
 import { history } from './history.js';
 
 export const scene = new THREE.Scene();
@@ -75,14 +75,34 @@ export function initViewport(el) {
   gizmo = new TransformControls(camera, renderer.domElement);
   gizmo.setSize(0.85);
   scene.add(gizmo.getHelper());
-  let before = null;
+  // Seleção múltipla: o gizmo controla um "pivô"; ao arrastar, a mesma transformação
+  // (delta = Pivô_agora × Pivô_inicial⁻¹) é aplicada à matriz inicial de cada objeto.
+  scene.add(pivotObj);
+  let before = null, start = null;
   gizmo.addEventListener('dragging-changed', (e) => {
     orbit.enabled = !e.value;
-    const o = gizmo.object; if (!o || state.mode === 'edit') return;
-    if (e.value) before = history.snapshot(o);
-    else if (before) { history.transform(o, before, 'Mover/Girar/Escalar'); before = null; bus.emit('object:transformed', o); }
+    if (!gizmo.object || state.mode !== 'object') return;
+    const targets = state.selection.length ? state.selection : [gizmo.object];
+    if (e.value) {
+      before = targets.map((o) => [o, history.snapshot(o)]);
+      pivotObj.updateMatrixWorld(true);
+      start = { inv: pivotObj.matrixWorld.clone().invert(), mats: targets.map((o) => o.matrix.clone()) };
+    } else if (before) {
+      const label = { translate: 'Mover', rotate: 'Girar', scale: 'Escalar' }[gizmo.mode];
+      const snaps = before.map(([o, s]) => [o, s, history.snapshot(o)]);
+      history.push({ label, undo: () => snaps.forEach(([o, s]) => history.restore(o, s)), redo: () => snaps.forEach(([o, , a]) => history.restore(o, a)) });
+      before = start = null; bus.emit('object:transformed', state.selected); placePivot();
+    }
   });
-  gizmo.addEventListener('objectChange', () => bus.emit('object:transforming', gizmo.object));
+  gizmo.addEventListener('objectChange', () => {
+    if (state.mode === 'object' && gizmo.object === pivotObj && start) {
+      pivotObj.updateMatrixWorld(true);
+      const delta = pivotObj.matrixWorld.clone().multiply(start.inv);
+      state.selection.forEach((o, i) => { delta.clone().multiply(start.mats[i]).decompose(o.position, o.quaternion, o.scale); });
+    }
+    bus.emit('object:transforming', state.selected);
+  });
+  bus.on('precision', applyPrecision); applyPrecision();
 
   viewHelper = new ViewHelper(camera, renderer.domElement);
   viewHelper.center = orbit.target;
@@ -104,9 +124,9 @@ export function initViewport(el) {
   new ResizeObserver(resize).observe(el);
   resize();
 
-  bus.on('selection', (o) => {
-    if (o && state.mode === 'object') gizmo.attach(o); else if (state.mode === 'object') gizmo.detach();
-    outlinePass.selectedObjects = o ? [o] : [];
+  bus.on('selection', () => {
+    if (state.mode === 'object') placePivot();
+    outlinePass.selectedObjects = state.selection.slice();
   });
   bus.on('request:select', (o) => select(o));
 
@@ -162,9 +182,39 @@ function setupPicking() {
     const r = el.getBoundingClientRect();
     if (e.clientX > r.right - 128 && e.clientY > r.bottom - 128) { viewHelper.handleClick(e); return; }
     if (state.mode === 'edit') { bus.emit('edit:click', e); return; }
-    const hit = pickAt(e.clientX, e.clientY)[0];
-    select(hit ? topLevel(hit.object) : null);
+    if (state.mode === 'pose') { bus.emit('pose:click', e); return; }
+    if (state.tool === 'measure' || state.tool === 'cursor') { bus.emit('viewport:click', e); return; }
+    const hit = pickAt(e.clientX, e.clientY).find((h) => !h.object.userData.noPick);
+    const obj = hit ? topLevel(hit.object) : null;
+    // Shift = adicionar/alternar · Ctrl = remover · clique simples = substituir
+    if (e.ctrlKey && obj) select(obj, { toggle: state.selection.includes(obj) });
+    else select(obj, { toggle: e.shiftKey });
   });
+}
+
+// ---------- Pivô da seleção (mediana / ativo / cursor 3D) ----------
+export const pivotObj = new THREE.Object3D(); pivotObj.name = '__pivot__';
+export const cursor3D = new THREE.Vector3();
+export function placePivot() {
+  const sel = state.selection;
+  if (!sel.length) { gizmo.detach(); return; }
+  if (sel.length === 1 && precision.pivot !== 'cursor') { gizmo.attach(sel[0]); return; }
+  const p = new THREE.Vector3();
+  if (precision.pivot === 'cursor') p.copy(cursor3D);
+  else if (precision.pivot === 'active') state.selected.getWorldPosition(p);
+  else { sel.forEach((o) => p.add(o.getWorldPosition(new THREE.Vector3()))); p.divideScalar(sel.length); }
+  pivotObj.position.copy(p); pivotObj.quaternion.copy(precision.orientation === 'local' ? state.selected.quaternion : new THREE.Quaternion());
+  pivotObj.scale.set(1, 1, 1); pivotObj.updateMatrixWorld(true);
+  gizmo.attach(pivotObj);
+}
+
+function applyPrecision() {
+  const on = precision.snap;
+  gizmo.setTranslationSnap(on ? precision.moveStep : null);
+  gizmo.setRotationSnap(on ? THREE.MathUtils.degToRad(precision.rotateStep) : null);
+  gizmo.setScaleSnap(on ? precision.scaleStep : null);
+  gizmo.space = precision.orientation === 'local' ? 'local' : 'world';
+  if (state.mode === 'object') placePivot();
 }
 
 // ---------- API pública do viewport ----------

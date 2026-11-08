@@ -1,6 +1,7 @@
 // Página de Configurações: provedores/chaves de IA, aparência (brilho), viewport,
 // cursores da IA, MCP, atualizações e sobre.
 import { PROVIDERS, getProvider } from '../ai/providers.js';
+import { providerLogo } from '../ai/logos.js';
 import { listModels } from '../ai/client.js';
 import { settings, saveSettings, applyUIPrefs } from '../core/settings.js';
 import { applyEnvironment, setGridVisible, renderer } from '../core/viewport.js';
@@ -37,9 +38,9 @@ function secAI(c, page) {
   const configured = PROVIDERS.filter((x) => settings.keys[x.id]).length;
   c.innerHTML = `<h2>IA e provedores</h2><p class="muted">${PROVIDERS.length - 1} provedores: ${PROVIDERS.filter((x) => !x.local).length} na nuvem e ${PROVIDERS.filter((x) => x.local && x.format !== 'demo').length} locais (rodam no seu PC, sem chave). ${configured} com chave salva.</p>
     <label class="search wide">${icon('search', 16)}<input id="pf" placeholder="Buscar provedor…" value="${esc(filter)}"></label>
-    <div class="prov-grid">${list.map((x) => `<button class="prov ${x.local ? 'local' : ''} ${x.id === sel ? 'on' : ''}" data-p="${x.id}"><span>${esc(x.name)}</span><small>${x.id === settings.provider ? '● em uso' : x.format === 'demo' ? 'offline' : x.local ? 'local' : settings.keys[x.id] ? 'chave ✓' : ''}</small></button>`).join('')}</div>
+    <div class="prov-grid">${list.map((x) => `<button class="prov ${x.local ? 'local' : ''} ${x.id === sel ? 'on' : ''}" data-p="${x.id}">${providerLogo(x, 24)}<span>${esc(x.name)}</span><small>${x.id === settings.provider ? '● em uso' : x.format === 'demo' ? 'offline' : x.local ? 'local' : settings.keys[x.id] ? 'chave ✓' : ''}</small></button>`).join('')}</div>
     <div class="set-card">
-      <div class="set-card-h"><b>${esc(p.name)}</b><span class="muted">${p.format === 'anthropic' ? 'API Anthropic' : p.format === 'demo' ? 'sem configuração' : 'compatível com OpenAI'}</span></div>
+      <div class="set-card-h">${providerLogo(p, 30)}<b>${esc(p.name)}</b><span class="muted">${p.format === 'anthropic' ? 'API Anthropic' : p.format === 'demo' ? 'sem configuração' : 'compatível com OpenAI'}</span></div>
       ${p.format === 'demo' ? '<p class="muted">Roda um roteiro offline para demonstrar os cursores da IA.</p>' : `
       <div class="set-row"><div><b>Chave de API</b><small>${p.keyOptional ? 'Opcional para servidores locais' : 'Obrigatória'}</small></div><input class="field" id="k" type="password" placeholder="cole sua chave aqui" value="${esc(settings.keys[p.id] || '')}"></div>
       <div class="set-row"><div><b>URL base</b><small>Mude se usa proxy ou servidor próprio</small></div><input class="field" id="u" value="${esc(settings.baseURLs[p.id] || p.baseURL)}"></div>

@@ -10,61 +10,69 @@
 </head>
 <body>
   <div id="boot"><div class="boot-mark"></div></div>
+
   <div id="app">
-    <header id="titlebar">
-      <div class="brand" id="brand"></div>
-      <div class="crumb" id="crumb"></div>
-      <button class="search-pill" id="search-pill"></button>
-      <div class="status" id="tb-status"></div>
+    <!-- O viewport ocupa a tela inteira; todo o resto flutua por cima -->
+    <div id="viewport">
+      <div class="vp-hint" id="vp-hint"></div>
+      <div class="vp-cam-badge" id="cam-badge"></div>
+    </div>
+
+    <header id="topbar">
+      <div class="tb-left">
+        <button class="brand" id="brand" title="Menu do app"></button>
+        <div class="crumb" id="crumb"></div>
+      </div>
+      <nav class="ws-pills float" id="workspaces"></nav>
+      <div class="tb-right">
+        <button class="search-pill float" id="search-pill"></button>
+        <div class="status" id="tb-status"></div>
+      </div>
     </header>
 
-    <div id="main">
-      <nav id="nav"></nav>
+    <div id="precision-bar" class="float"></div>
 
-      <section id="stage">
-        <div id="ws3d">
-          <section id="center">
-            <div id="viewport">
-              <div class="vp-top">
-                <div class="seg" id="mode-seg"></div>
-                <div class="vp-add" id="vp-add"></div>
-                <div class="spacer"></div>
-                <div class="seg" id="shading-seg"></div>
-              </div>
-              <div class="scene-card" id="scene-card">
-                <div class="panel-h"><button class="sc-toggle" id="sc-toggle"><span>Cena</span></button><div class="panel-actions" id="outliner-actions"></div></div>
-                <div id="outliner"></div>
-              </div>
-              <div class="tool-dock" id="tool-dock"></div>
-              <div class="vp-hint" id="vp-hint"></div>
-              <div class="vp-cam-badge" id="cam-badge"></div>
-            </div>
-            <div id="splitter-h" class="splitter h"></div>
-            <div id="bottom">
-              <div class="bt-bar" id="bt-bar"></div>
-              <div id="timeline"></div>
-            </div>
-          </section>
-          <aside id="inspector">
-            <div class="tabs" id="prop-tabs"></div>
-            <div id="props"></div>
-          </aside>
+    <aside id="left-panel" class="float panel">
+      <div class="panel-h"><div class="seg sm" id="mode-seg"></div><div class="panel-actions" id="outliner-actions"></div></div>
+      <div id="outliner"></div>
+    </aside>
+
+    <aside id="right-panel" class="float panel">
+      <div class="tabs icons" id="prop-tabs"></div>
+      <div id="props"></div>
+    </aside>
+
+    <div id="view-tools" class="float">
+      <div class="seg sm vertical" id="shading-seg"></div>
+    </div>
+
+    <div id="tool-dock" class="float"></div>
+    <div id="op-panel" class="float"></div>
+
+    <section id="bottom" class="float">
+      <div class="bt-bar" id="bt-bar"></div>
+      <div id="timeline"></div>
+    </section>
+
+    <aside id="ai" class="float panel">
+      <div class="panel-h ai-h"><span class="ai-title"></span><div class="panel-actions" id="ai-actions"></div></div>
+      <div class="ai-provider" id="ai-provider"></div>
+      <div id="ai-log"></div>
+      <form id="ai-form">
+        <textarea id="ai-input" rows="2" placeholder="Descreva o que criar…"></textarea>
+        <div class="ai-form-bar">
+          <span class="ai-cursors-ctl" id="ai-cursors-ctl"></span>
+          <button type="submit" class="btn primary sm" id="ai-send"></button>
         </div>
-        <div id="page"></div>
-      </section>
+      </form>
+    </aside>
 
-      <aside id="ai">
-        <div class="panel-h ai-h"><span>Assistente</span><div class="panel-actions" id="ai-actions"></div></div>
-        <div class="ai-provider" id="ai-provider"></div>
-        <div id="ai-log"></div>
-        <form id="ai-form">
-          <textarea id="ai-input" rows="3" placeholder="Descreva o que criar…  (Enter envia)"></textarea>
-          <div class="ai-form-bar">
-            <span class="ai-cursors-ctl" id="ai-cursors-ctl"></span>
-            <button type="submit" class="btn primary" id="ai-send"></button>
-          </div>
-        </form>
-      </aside>
+    <!-- Páginas (Início, Loja, Código, Engines, Comandos, Ajustes) abrem como uma "folha" flutuante -->
+    <div id="sheet">
+      <div class="sheet-card">
+        <div class="sheet-h"><div class="sheet-title" id="sheet-title"></div><button class="icon-btn" id="sheet-close" title="Fechar (Esc)"></button></div>
+        <div id="page"></div>
+      </div>
     </div>
   </div>
   <div id="modal-root"></div>

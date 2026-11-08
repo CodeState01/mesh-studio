@@ -3,7 +3,7 @@ import { commands, runCommand } from '../core/commands.js';
 import { icon } from './icons.js';
 
 const GROUP_ICON = { Arquivo: 'folder', Editar: 'undo', Adicionar: 'plus', Luz: 'light', VFX: 'spark', Ferramentas: 'move', Modelagem: 'extrude', Escultura: 'brush',
-  Exibir: 'eye', Animação: 'key', Vídeo: 'film', Render: 'aperture', Ir: 'home', Ajuda: 'chat' };
+  Exibir: 'eye', Animação: 'key', Vídeo: 'film', Render: 'aperture', Ir: 'home', Ajuda: 'chat', Precisão: 'ruler', 'UV e Pintura': 'paint', 'Rig e Física': 'bone' };
 let q = '';
 const esc = (s) => String(s).replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
 const kbd = (k) => k.split('+').map((x) => `<kbd>${x.replace('Numpad', 'Num ')}</kbd>`).join('');
@@ -16,7 +16,7 @@ export function renderCommands(el) {
     const list = all.filter((c) => `${c.label} ${c.group} ${c.keys || ''}`.toLowerCase().includes(q));
     const groups = {}; list.forEach((c) => (groups[c.group] ||= []).push(c));
     el.querySelector('#cmd-list').innerHTML = Object.entries(groups).map(([g, cs]) => `<section class="cmd-group"><h3>${icon(GROUP_ICON[g] || 'list', 15)} ${g} <span>${cs.length}</span></h3>
-      ${cs.map((c) => `<button class="cmd-row" data-id="${c.id}"><span>${esc(c.label)}</span>${c.desc ? `<small>${esc(c.desc)}</small>` : ''}<span class="keys">${c.keys ? kbd(c.keys) : ''}</span></button>`).join('')}</section>`).join('')
+      ${cs.map((c) => `<button class="cmd-row" data-id="${c.id}">${icon(c.icon || 'dot', 16)}<span>${esc(c.label)}</span>${c.desc ? `<small>${esc(c.desc)}</small>` : ''}<span class="keys">${c.keys ? kbd(c.keys) : ''}</span></button>`).join('')}</section>`).join('')
       || `<div class="empty">Nenhum comando para “${esc(q)}”.</div>`;
   };
   const i = el.querySelector('#cq'); i.onkeydown = (e) => e.stopPropagation(); i.oninput = () => { q = i.value.toLowerCase(); draw(); };

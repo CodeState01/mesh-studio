@@ -1,7 +1,9 @@
 // Argila Studio — processo principal do Electron
 // Responsável por: janela, ponte MCP (WebSocket), proxy de IA (sem CORS),
 // armazenamento seguro de chaves, diálogos de arquivo e auto-update.
-const { app, BrowserWindow, ipcMain, dialog, safeStorage, shell } = require('electron');
+const { app, BrowserWindow, ipcMain, dialog, safeStorage, shell, Menu } = require('electron');
+// Sem menu padrão do Electron: senão Ctrl+R recarrega a janela (no Argila é Loop Cut).
+Menu.setApplicationMenu(null);
 const path = require('node:path');
 const fs = require('node:fs');
 const { startBridge } = require('./bridge.cjs');

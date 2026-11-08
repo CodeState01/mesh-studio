@@ -5,6 +5,7 @@ import { anim, setTime, play, insertKey, addSFX } from '../anim/timeline.js';
 import { SFX_PRESETS, playSFX, decodeAudio } from '../fx/audio.js';
 import { video, videoPlay, videoSeek, addClip, importMedia, splitAtPlayhead, deleteSelectedClip, exportVideo, renderTimeline as renderVideoTL, videoDuration } from '../video/editor.js';
 import { icon } from './icons.js';
+import { renderGraph } from '../anim/graph.js';
 import { toast } from './toast.js';
 
 const $ = (s, r = document) => r.querySelector(s);
@@ -21,7 +22,7 @@ export function initTimelineUI() {
   bus.on('anim:changed', () => renderDopesheet());
   bus.on('scene:changed', () => renderDopesheet());
   bus.on('selection', () => renderDopesheet());
-  bus.on('time', () => { updateHead(); const t = $('#tc'); if (t && state.workspace !== 'video') t.textContent = tc(state.time); });
+  bus.on('time', () => { if (tlMode === 'graph') redrawGraph?.(); updateHead(); const t = $('#tc'); if (t && state.workspace !== 'video') t.textContent = tc(state.time); });
   bus.on('video:time', (t) => { const e = $('#tc'); if (e && state.workspace === 'video') e.textContent = tc(t, video.fps); });
   bus.on('play', () => renderBar());
   bus.on('video:play', () => renderBar());
@@ -53,6 +54,7 @@ function renderBar() {
       <button class="icon-btn ${state.playing ? 'on' : ''}" data-a="play" title="Play (Espaço)">${icon(state.playing ? 'pause' : 'play', 16)}</button>
       <button class="icon-btn" data-a="end" title="Fim">${icon('next', 16)}</button>
       <span class="tc" id="tc">${tc(state.time)}</span>
+      <div class="seg sm" id="tl-mode"><button data-tm="dope" class="${tlMode === 'dope' ? 'on' : ''}">${icon('list', 14)}Dopesheet</button><button data-tm="graph" class="${tlMode === 'graph' ? 'on' : ''}">${icon('graph', 14)}Curvas</button></div>
       <span class="sep"></span>
       <button class="btn sm" data-a="key" title="Inserir keyframe (I)">${icon('key', 13)} Keyframe</button>
       <select class="field" id="sfx-pick" title="Adicionar SFX no playhead"><option value="">+ SFX…</option>${SFX_PRESETS.map((p) => `<option>${p}</option>`).join('')}</select>
@@ -62,7 +64,7 @@ function renderBar() {
       <span class="lbl">FPS</span><select class="field" id="fps">${[24, 25, 30, 50, 60].map((f) => `<option ${f === state.fps ? 'selected' : ''}>${f}</option>`).join('')}</select>`;
     renderDopesheet();
   }
-  bar.onclick = onBar;
+  bar.onclick = (e) => { const m = e.target.closest('[data-tm]'); if (m) { tlMode = m.dataset.tm; renderBar(); return; } onBar(e); };
   const dur = $('#dur'); if (dur) { dur.onkeydown = (e) => e.stopPropagation(); dur.onchange = () => { state.duration = Math.max(1, +dur.value); renderDopesheet(); }; }
   const fps = $('#fps'); if (fps) fps.onchange = () => { state.fps = +fps.value; };
   const sp = $('#sfx-pick'); if (sp) sp.onchange = () => { if (sp.value) { addSFX(sp.value, state.time); playSFX(sp.value); toast(`SFX “${sp.value}” em ${state.time.toFixed(2)}s`); } sp.value = ''; };
@@ -102,8 +104,11 @@ async function onBar(e) {
 }
 
 // ---------- Dopesheet ----------
+let tlMode = 'dope'; // 'dope' | 'graph'
+let redrawGraph = null;
 function renderDopesheet() {
   if (state.workspace === 'video') return;
+  if (tlMode === 'graph') { redrawGraph = renderGraph($('#timeline')); return; }
   const el = $('#timeline'); const width = el.clientWidth - NAME_W - 16;
   pps = Math.max(20, width / state.duration);
   const objs = content.children.filter((o) => anim.tracks.has(o.userData.id) || o === state.selected);
