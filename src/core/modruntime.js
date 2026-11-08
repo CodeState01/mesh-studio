@@ -2,12 +2,16 @@
 // A base é salva no projeto (userData.modBase) para não aplicar os modificadores duas vezes ao reabrir.
 import * as THREE from 'three';
 import { EditMesh } from './editmesh.js';
-import { evaluate, MODIFIERS, defaultParams } from './modstack.js';
+import { evaluate, MODIFIERS, defaultParams, modContext } from './modstack.js';
 import { state, bus } from './state.js';
 import { edit } from './editmode.js';
 import { history } from './history.js';
 import { content } from './objects.js';
 import { toast } from '../ui/toast.js';
+
+// Shrinkwrap: alvo resolvido pelo nome, com a matriz alvo→local do objeto que está sendo avaliado
+let evaluating = null;
+modContext.findMesh = (name) => { if (!name || !evaluating) return null; let t = null; content.traverse((o) => { if (!t && o.isMesh && o.name === name && o !== evaluating) t = o; }); if (!t) return null; evaluating.updateMatrixWorld(); t.updateMatrixWorld(); return { geometry: t.geometry, toLocal: evaluating.matrixWorld.clone().invert().multiply(t.matrixWorld) }; };
 
 const baseOf = (m) => {
   if (!m.__em) { m.__em = EditMesh.fromGeometry(m.geometry); m.__em.smooth = m.userData.smooth ?? false; }
@@ -21,7 +25,8 @@ export function refresh(mesh) {
   if (edit.mesh === mesh) return; // no modo de edição mostramos a "gaiola" (base)
   const base = baseOf(mesh);
   if (stack.length) mesh.userData.modBase = pack(base); else delete mesh.userData.modBase;
-  mesh.geometry.dispose(); mesh.geometry = evaluate(base, stack).toGeometry();
+  evaluating = mesh; let out; try { out = evaluate(base, stack); } finally { evaluating = null; }
+  mesh.geometry.dispose(); mesh.geometry = out.toGeometry();
   bus.emit('modifiers:changed', mesh);
 }
 

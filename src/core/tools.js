@@ -119,4 +119,7 @@ export const VERB = {
   add_modifier: 'modificando malha', delete_object: 'removendo', add_keyframe: 'animando', motion_preset: 'criando motion',
   set_timeline: 'ajustando timeline', add_vfx: 'criando VFX', add_sfx: 'criando SFX', set_environment: 'ajustando mundo',
   video_add_clip: 'editando vídeo', screenshot: 'renderizando',
+  heatmap: 'analisando a malha', heat_weights: 'calculando pesos', render_cycles: 'renderizando (Ciclos)', viewport_cycles: 'ligando path tracing',
+  geometry_nodes: 'montando nós', add_curve: 'traçando curva', draw_stroke: 'desenhando', add_simulation: 'criando simulação', simulate: 'simulando',
+  add_constraint: 'ligando restrição', add_ik: 'criando IK', add_modifier_stack: 'modificando malha', compositor: 'compondo a imagem',
 };

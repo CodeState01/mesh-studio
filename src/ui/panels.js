@@ -18,6 +18,7 @@ import { getPhys, physics, SHAPES, startSim, stopSim, bake, makeCloth, resetClot
 import { runCommand } from '../core/commands.js';
 import { getEditApi } from '../core/precision.js';
 import { icon } from './icons.js';
+import { renderFeatures } from '../features/inspector.js';
 import { toast } from './toast.js';
 
 const $ = (s, r = document) => r.querySelector(s);
@@ -66,7 +67,7 @@ export function initOutliner() {
 const TABS = [
   { id: 'object', label: 'Objeto', icon: 'object' }, { id: 'mesh', label: 'Malha', icon: 'mesh' }, { id: 'material', label: 'Material', icon: 'texture' },
   { id: 'uv', label: 'UV e Pintura', icon: 'uv' }, { id: 'rig', label: 'Rig', icon: 'bone' }, { id: 'physics', label: 'Física', icon: 'physics' },
-  { id: 'motion', label: 'Animação', icon: 'key' }, { id: 'world', label: 'Mundo', icon: 'globe' },
+  { id: 'motion', label: 'Animação', icon: 'key' }, { id: 'extra', label: 'Recursos (nós, calor, curvas, simulação, restrições)', icon: 'sparkle' }, { id: 'world', label: 'Mundo', icon: 'globe' },
 ];
 let tab = 'object', lastClip = null;
 
@@ -83,6 +84,7 @@ export function initProperties() {
   bus.on('uv:changed', () => tab === 'uv' && render());
   bus.on('physics', () => tab === 'physics' && render());
   bus.on('modifiers:changed', () => tab === 'mesh' && state.mode !== 'edit' && render());
+  ['heat', 'constraints', 'shapekeys', 'curve:changed', 'sims'].forEach((ev) => bus.on(ev, () => tab === 'extra' && !document.querySelector('#props')?.contains(document.activeElement) && render()));
   bus.on('video:selection', (c) => { const same = c && lastClip && c.id === lastClip.id && $('#props').contains(document.activeElement); lastClip = c; if (state.workspace === 'video' && !same) renderClip(c); });
   bus.on('workspace', (ws) => { const map = { paint: 'uv', animate: 'motion', vfx: 'object', sculpt: 'mesh' }; if (map[ws]) setTab(map[ws]); else render(); });
   setTab('object');
@@ -104,7 +106,7 @@ function render() {
   if (tab === 'world') return renderWorld(el);
   if (tab === 'mesh' && state.mode === 'edit') return renderEditMesh(el);
   if (!o) { el.innerHTML = `<div class="empty">${icon(title.icon, 30)}Nada selecionado.<br>Clique num objeto no viewport ou na lista da cena.</div>`; return; }
-  ({ object: renderObject, mesh: renderMesh, material: renderMaterial, uv: renderUV, rig: renderRig, physics: renderPhysics, motion: renderMotion }[tab])(el, o);
+  ({ object: renderObject, mesh: renderMesh, material: renderMaterial, uv: renderUV, rig: renderRig, physics: renderPhysics, motion: renderMotion, extra: renderFeatures }[tab])(el, o);
 }
 
 // Campo numérico: arraste horizontal (Shift = fino, Ctrl = passo do snap), clique para digitar, aceita expressões (ex.: 2*3.5).
@@ -213,7 +215,12 @@ function renderMesh(el, o) {
     for (const [k, spec] of Object.entries(def.params)) {
       const row = document.createElement('div'); row.className = 'row';
       row.innerHTML = `<label>${PARAM_LABEL[k] || k}</label>`;
-      if (Array.isArray(spec[1])) { // enum (ex.: eixo)
+      if (spec[1] === 'object') { // outro objeto da cena (ex.: alvo do Shrinkwrap)
+        const s = document.createElement('select'); s.className = 'field';
+        const names = []; content.traverse((x) => { if (x.isMesh && x !== o && x.userData.id && !x.userData.proxy) names.push(x.name); });
+        s.innerHTML = `<option value="">— escolha —</option>` + names.map((n) => `<option ${m.params[k] === n ? 'selected' : ''}>${esc(n)}</option>`).join('');
+        s.onchange = () => setParam(o, i, k, s.value); row.appendChild(s);
+      } else if (Array.isArray(spec[1])) { // enum (ex.: eixo)
         const s = document.createElement('div'); s.className = 'seg sm'; s.innerHTML = spec[1].map((v) => `<button class="${m.params[k] === v ? 'on' : ''}" data-v="${v}" style="flex:1;justify-content:center">${v.toUpperCase()}</button>`).join('');
         s.onclick = (e) => { const b = e.target.closest('[data-v]'); if (b) setParam(o, i, k, b.dataset.v); }; row.appendChild(s);
       } else row.appendChild(numField('', m.params[k], (v, commit) => { if (commit) setParam(o, i, k, Math.min(spec[2], Math.max(spec[1], spec[3] >= 1 ? Math.round(v) : v))); }, spec[3] || 0.01));
@@ -231,7 +238,7 @@ function renderMesh(el, o) {
     if (e.target.closest('[data-m=decimate]')) { try { applyModifier(o, 'decimate', { amount: 0.5 }); delete o.__em; toast('Malha reduzida'); render(); } catch (err) { toast(err.message, { kind: 'error' }); } }
   };
 }
-const PARAM_LABEL = { levels: 'Níveis', axis: 'Eixo', count: 'Cópias', offsetX: 'Desloc. X', offsetY: 'Desloc. Y', offsetZ: 'Desloc. Z', thickness: 'Espessura', angle: 'Ângulo °', strength: 'Força', scale: 'Escala', seed: 'Semente' };
+const PARAM_LABEL = { levels: 'Níveis', axis: 'Eixo', count: 'Cópias', offsetX: 'Desloc. X', offsetY: 'Desloc. Y', offsetZ: 'Desloc. Z', thickness: 'Espessura', angle: 'Ângulo °', strength: 'Força', scale: 'Escala', seed: 'Semente', factor: 'Fator', iterations: 'Iterações', ratio: 'Proporção', voxel: 'Voxel (m)', target: 'Alvo', offset: 'Distância', distance: 'Distância' };
 
 // Modo de edição: modos, operações e a POSIÇÃO EXATA da seleção (mediana dos vértices)
 let editFields = null;

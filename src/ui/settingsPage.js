@@ -1,6 +1,6 @@
 // Página de Configurações: provedores/chaves de IA, aparência (brilho), viewport,
 // cursores da IA, MCP, atualizações e sobre.
-import { PROVIDERS, getProvider } from '../ai/providers.js';
+import { PROVIDERS, getProvider, KEY_PAGES, authOf } from '../ai/providers.js';
 import { providerLogo } from '../ai/logos.js';
 import { listModels } from '../ai/client.js';
 import { settings, saveSettings, applyUIPrefs } from '../core/settings.js';
@@ -9,6 +9,7 @@ import { state, bus } from '../core/state.js';
 import { setCursorCount, cursorConfig } from './cursors.js';
 import { icon, LOGO } from './icons.js';
 import { toast } from './toast.js';
+import { askText } from './dialog.js';
 
 const esc = (s) => String(s ?? '').replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
 const SECTIONS = [
@@ -131,32 +132,79 @@ function secAbout(c) {
     <p class="muted">Assets da Comunidade: Poly Haven (CC0). Fonte 3D: Helvetiker (licença inclusa).</p></div>`;
 }
 
-// ---------- Contas: usar sua assinatura (Gemini/Claude/ChatGPT) em vez de chave de API ----------
-const ACCOUNT_PROVIDER = { gemini: 'acct-gemini', claude: 'acct-claude', codex: 'acct-chatgpt' };
+// ---------- Contas: TODOS os provedores, cada um pelo login mais direto que ele oferece ----------
+// cli → assinatura via ferramenta oficial · oauth/ghcli → login no navegador devolve a chave
+// console → entra na sua conta na página oficial e o Mesh capta a chave copiada · local → detecção automática
+const ACCOUNT_PROVIDER = { gemini: 'acct-gemini', claude: 'acct-claude', codex: 'acct-chatgpt', qwen: 'acct-qwen', copilot: 'acct-copilot' };
+let accFilter = '', localState = null;
+const chip = (ok, yes, no) => `<span class="${ok ? 'free' : 'muted'}" style="font-size:12px">${icon(ok ? 'check' : 'close', 13)} ${ok ? yes : no}</span>`;
+
+async function saveKey(p, key, how) {
+  settings.keys[p.id] = key; saveSettings();
+  try { const ms = await listModels({ provider: p.id, key, baseURL: settings.baseURLs[p.id] }); toast(`${p.name}: conta conectada (${how}) · ${ms.length} modelos`); }
+  catch { toast(`${p.name}: chave salva (${how}). Teste a conexão em Provedores com API.`); }
+}
+
 async function secAccounts(c, page) {
-  c.innerHTML = `<h2>Contas</h2><p class="muted">Use a conta que você já tem — grátis, Pro, Plus ou Max — em vez de pagar API. O Mesh roda a ferramenta oficial de cada empresa, que faz login com a sua conta, e entrega a ela <b>somente</b> as ferramentas do Mesh (sem terminal, sem arquivos, sem web).</p><div id="acc-list" class="muted" style="margin-top:14px">Verificando…</div>`;
-  if (!window.meshApp?.agents) { c.querySelector('#acc-list').textContent = 'Disponível apenas no app desktop.'; return; }
+  const desk = !!window.meshApp?.accounts;
+  const cloud = PROVIDERS.filter((p) => authOf(p) === 'console' && p.name.toLowerCase().includes(accFilter));
+  const locals = PROVIDERS.filter((p) => authOf(p) === 'local' && p.format !== 'demo');
+  const connected = PROVIDERS.filter((p) => settings.keys[p.id]).length;
+  c.innerHTML = `<h2>Contas</h2><p class="muted">Conecte qualquer um dos ${PROVIDERS.length - 1} provedores com a <b>sua conta</b>. Assinaturas (Gemini, Claude, ChatGPT, Qwen, Copilot) rodam pela ferramenta oficial, sem API. Os demais: login no navegador ou na página oficial de chaves. ${connected} conectado(s).</p>
+    <h3>${icon('UserRound', 15)} Assinaturas (sem chave de API)</h3><div id="acc-cli" class="muted">Verificando…</div>
+    <h3>${icon('globe', 15)} Login no navegador (automático)</h3>
+    <div class="engine-grid">${['openrouter', 'github'].map((id) => { const p = getProvider(id); return `<article class="engine" style="--ec:#b9f23c">
+      <header>${providerLogo(p, 32)}<b>${esc(p.name)}</b>${settings.provider === id ? '<span class="live-pill">em uso</span>' : ''}</header>
+      <p>${id === 'openrouter' ? 'Entre na sua conta OpenRouter no navegador — a chave volta sozinha (OAuth PKCE). Dá acesso a centenas de modelos.' : 'Usa o login que você já fez no GitHub CLI (<code>gh auth login</code>) para acessar o GitHub Models.'}</p>
+      <div>${chip(!!settings.keys[id], 'Conta conectada', 'Sem login')}</div>
+      <footer><button class="btn sm" data-oauth="${id}" ${desk ? '' : 'disabled'}>${icon('UserRound', 14)} ${settings.keys[id] ? 'Reconectar' : 'Entrar com a conta'}</button>
+      <button class="btn sm primary" data-use="${id}" ${settings.keys[id] && settings.provider !== id ? '' : 'disabled'}>${icon('bot', 14)} Usar</button></footer></article>`; }).join('')}</div>
+    <h3>${icon('cloud', 15)} Entrar na conta e pegar a chave (${cloud.length})</h3>
+    <p class="muted" style="font-size:12px">“Entrar” abre a página oficial do provedor numa janela com login salvo. Crie ou copie sua chave e feche a janela: o Mesh detecta a chave copiada e conecta.</p>
+    <label class="search wide">${icon('search', 16)}<input id="acc-f" placeholder="Buscar provedor…" value="${esc(accFilter)}"></label>
+    <div class="acc-grid">${cloud.map((p) => `<div class="acc-card ${settings.keys[p.id] ? 'ok' : ''}">${providerLogo(p, 28)}<div class="acc-meta"><b>${esc(p.name)}</b><small>${settings.provider === p.id ? '● em uso' : settings.keys[p.id] ? 'conectado ✓' : 'não conectado'}</small></div>
+      <div class="acc-act"><button class="btn sm" data-page="${p.id}" ${desk && KEY_PAGES[p.id] ? '' : 'disabled'} title="Abrir a página oficial e entrar na sua conta">${icon('UserRound', 14)} Entrar</button>
+      <button class="icon-btn" data-paste="${p.id}" title="Colar chave manualmente">${icon('KeyRound', 15)}</button>
+      <button class="icon-btn" data-use="${p.id}" title="Usar no assistente" ${settings.keys[p.id] ? '' : 'disabled'}>${icon('bot', 15)}</button></div></div>`).join('')}</div>
+    <h3>${icon('cpu', 15)} No seu PC (sem conta)</h3>
+    <div class="set-actions" style="margin-bottom:8px"><button class="btn sm" id="acc-detect" ${desk ? '' : 'disabled'}>${icon('refresh', 14)} Detectar servidores locais</button><span class="muted" id="acc-dres"></span></div>
+    <div class="acc-grid">${locals.map((p) => { const st = localState?.[p.id]; return `<div class="acc-card ${st?.ok ? 'ok' : ''}">${providerLogo(p, 28)}<div class="acc-meta"><b>${esc(p.name)}</b><small>${!localState ? esc(p.baseURL.replace('http://', '')) : st?.ok ? `rodando · ${st.models.length} modelo(s)` : 'desligado'}</small></div>
+      <div class="acc-act"><button class="icon-btn" data-use="${p.id}" title="Usar no assistente" ${st?.ok ? '' : 'disabled'}>${icon('bot', 15)}</button></div></div>`; }).join('')}</div>
+    <div class="set-actions" style="margin-top:16px"><button class="btn sm" id="acc-clear" ${desk ? '' : 'disabled'}>${icon('trash', 14)} Sair de todas as contas da janela de login</button></div>`;
+
+  const f = c.querySelector('#acc-f'); f.onkeydown = (e) => e.stopPropagation();
+  f.oninput = () => { accFilter = f.value.toLowerCase(); secAccounts(c, page).then(() => { const n = c.querySelector('#acc-f'); n.focus(); n.setSelectionRange(n.value.length, n.value.length); }); };
+  c.onclick = async (e) => {
+    const t = (sel) => e.target.closest(sel);
+    if (t('[data-use]')) { const id = t('[data-use]').dataset.use; settings.provider = id; if (localState?.[id]?.models?.[0] && !settings.models[id]) settings.models[id] = localState[id].models[0]; saveSettings(); toast(`Assistente usando ${getProvider(id).name}`); return secAccounts(c, page); }
+    if (t('[data-oauth]')) { const p = getProvider(t('[data-oauth]').dataset.oauth); toast('Conclua o login no navegador…'); try { const r = await window.meshApp.accounts.oauth(p.id); await saveKey(p, r.key, 'login'); } catch (err) { toast(err.message, { kind: 'error' }); } return secAccounts(c, page); }
+    if (t('[data-page]')) { const p = getProvider(t('[data-page]').dataset.page); const r = await window.meshApp.accounts.keyPage(KEY_PAGES[p.id]); if (r.key) await saveKey(p, r.key, 'conta'); else toast('Nenhuma chave nova copiada — use o botão de chave para colar.'); return secAccounts(c, page); }
+    if (t('[data-paste]')) { const p = getProvider(t('[data-paste]').dataset.paste); const k = await askText(`Chave de ${p.name}`, settings.keys[p.id] || ''); if (k != null) { if (k.trim()) await saveKey(p, k.trim(), 'manual'); else { delete settings.keys[p.id]; saveSettings(); } } return secAccounts(c, page); }
+    if (t('#acc-detect')) { c.querySelector('#acc-dres').textContent = 'Procurando…'; localState = await window.meshApp.accounts.detectLocal(locals.map((p) => ({ id: p.id, baseURL: settings.baseURLs[p.id] || p.baseURL }))); const n = Object.values(localState).filter((x) => x.ok).length; toast(n ? `${n} servidor(es) local(is) rodando` : 'Nenhum servidor local rodando'); return secAccounts(c, page); }
+    if (t('#acc-clear')) { await window.meshApp.accounts.clearSession(); toast('Sessões da janela de login apagadas'); return; }
+    // Assinaturas (CLIs oficiais)
+    const l = t('[data-login]'); if (l) { await window.meshApp.agents.login(l.dataset.login); toast('Conclua o login na janela que abriu'); return; }
+    const u = t('[data-cliuse]'); if (u) { settings.provider = u.dataset.cliuse; saveSettings(); toast('Assistente usando sua assinatura'); return secAccounts(c, page); }
+    const cp = t('[data-copy]'); if (cp) { navigator.clipboard.writeText(cp.dataset.copy); toast('Comando copiado'); return; }
+    if (t('#acc-refresh')) return secAccounts(c, page);
+  };
+  renderCliAccounts(c.querySelector('#acc-cli'));
+}
+
+async function renderCliAccounts(slot) {
+  if (!window.meshApp?.agents) { slot.textContent = 'Disponível apenas no app desktop.'; return; }
   const st = await window.meshApp.agents.status();
-  c.querySelector('#acc-list').outerHTML = `<div class="engine-grid">${Object.values(st).map((a) => {
+  slot.outerHTML = `<div class="engine-grid">${Object.values(st).map((a) => {
     const p = getProvider(ACCOUNT_PROVIDER[a.id]); const using = settings.provider === p.id;
-    const chip = (ok, yes, no) => `<span class="${ok ? 'free' : 'muted'}" style="font-size:12px">${icon(ok ? 'check' : 'close', 13)} ${ok ? yes : no}</span>`;
     return `<article class="engine" style="--ec:#b9f23c">
       <header>${providerLogo(p, 32)}<b>${a.name}</b>${using ? '<span class="live-pill">em uso</span>' : ''}</header>
-      <p>${a.account}</p>
-      <div style="display:flex;gap:14px;align-items:center">${chip(a.installed, 'Instalado', 'Não instalado')}${chip(a.loggedIn, 'Conta conectada', 'Sem login')}${a.runnable ? '' : '<span class="muted" style="font-size:12px">· agente em breve</span>'}</div>
+      <p>${a.account}${a.restricted ? `<br><small class="muted">${icon('lock', 12)} ${a.restricted}</small>` : ''}</p>
+      <div style="display:flex;gap:14px;align-items:center">${chip(a.installed, 'Instalado', 'Não instalado')}${chip(a.loggedIn, 'Conta conectada', 'Sem login')}</div>
       ${a.installed ? '' : `<div class="code" style="white-space:pre-wrap">${esc(a.install)}</div><small class="muted">Rode este comando no PowerShell para instalar a ferramenta oficial.</small>`}
       <footer>
         <button class="btn sm" data-copy="${esc(a.install)}" ${a.installed ? 'style="display:none"' : ''}>${icon('copy', 14)} Copiar comando</button>
         <button class="btn sm" data-login="${a.id}" ${a.installed ? '' : 'disabled'}>${icon('UserRound', 14)} ${a.loggedIn ? 'Trocar conta' : 'Conectar conta'}</button>
-        <button class="btn sm primary" data-use="${p.id}" ${a.installed && a.loggedIn && a.runnable && !using ? '' : 'disabled'}>${icon('bot', 14)} Usar no assistente</button>
+        <button class="btn sm primary" data-cliuse="${p.id}" ${a.installed && a.loggedIn && a.runnable && !using ? '' : 'disabled'}>${icon('bot', 14)} Usar</button>
       </footer></article>`;
-  }).join('')}</div>
-  <p class="muted" style="margin-top:14px;font-size:12px">${icon('info', 13)} O uso conta nos limites da sua assinatura. Para trocar de conta, clique em “Trocar conta”. Depois de entrar no navegador, volte aqui e clique em Atualizar.</p>
-  <button class="btn sm" id="acc-refresh" style="margin-top:6px">${icon('refresh', 14)} Atualizar</button>`;
-  c.onclick = async (e) => {
-    const l = e.target.closest('[data-login]'); if (l) { await window.meshApp.agents.login(l.dataset.login); toast('Conclua o login na janela que abriu'); }
-    const u = e.target.closest('[data-use]'); if (u) { settings.provider = u.dataset.use; saveSettings(); toast('Assistente usando sua conta'); secAccounts(c, page); }
-    const cp = e.target.closest('[data-copy]'); if (cp) { navigator.clipboard.writeText(cp.dataset.copy); toast('Comando copiado'); }
-    if (e.target.closest('#acc-refresh')) secAccounts(c, page);
-  };
+  }).join('')}</div><button class="btn sm" id="acc-refresh" style="margin-top:8px">${icon('refresh', 14)} Atualizar status</button>`;
 }

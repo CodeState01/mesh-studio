@@ -199,6 +199,85 @@ export const TOOLS = [
     input_schema: { type: 'object', properties: { width: { type: 'number' }, height: { type: 'number' } } },
     ui: 'render',
   },
+  // ---------- Recursos estilo Blender ----------
+  {
+    name: 'heatmap',
+    description: 'Mostra pontos de calor (heatmap) de análise na malha: curvatura, espessura, saliência p/ impressão 3D, arestas vivas, distorção de UV, distância ao cursor, densidade ou pesos de osso. mode "off" desliga.',
+    input_schema: { type: 'object', properties: { target, mode: { type: 'string', enum: ['curvature', 'thickness', 'overhang', 'sharpness', 'distortion', 'distance', 'density', 'weights', 'off'] } }, required: ['target', 'mode'] },
+    ui: 'viewport',
+  },
+  {
+    name: 'heat_weights',
+    description: 'Recalcula os pesos de pele de uma malha com esqueleto por difusão de calor (como Automatic Weights/Bone Heat).',
+    input_schema: { type: 'object', properties: { target }, required: ['target'] },
+    ui: 'viewport',
+  },
+  {
+    name: 'render_cycles',
+    description: 'Renderiza a imagem final com path tracing físico (estilo Cycles) e salva PNG.',
+    input_schema: { type: 'object', properties: { samples: { type: 'number', description: '16-2048, padrão 128' }, width: { type: 'number' }, height: { type: 'number' } } },
+    ui: 'render',
+  },
+  {
+    name: 'viewport_cycles',
+    description: 'Liga/desliga o path tracing progressivo no viewport.',
+    input_schema: { type: 'object', properties: { enabled: { type: 'boolean' }, bounces: { type: 'number' } } },
+    ui: 'render',
+  },
+  {
+    name: 'geometry_nodes',
+    description: 'Adiciona nós de geometria (Geometry Nodes) a uma malha com um modelo pronto.',
+    input_schema: { type: 'object', properties: { target, preset: { type: 'string', enum: ['basic', 'rocks', 'grass', 'cubegrid', 'organic'] } }, required: ['target'] },
+    ui: 'viewport',
+  },
+  {
+    name: 'add_curve',
+    description: 'Cria uma curva (tubo) por pontos de controle suaves. Use points para um caminho personalizado. Serve de caminho para a restrição follow.',
+    input_schema: { type: 'object', properties: { type: { type: 'string', enum: ['bezier', 'path', 'circle', 'spiral', 'helix'] }, points: { type: 'array', items: vec3 }, closed: { type: 'boolean' }, bevel: { type: 'number', description: 'raio do tubo (m)' }, name: { type: 'string' }, color: { type: 'string' }, position: vec3 } },
+    ui: 'add',
+  },
+  {
+    name: 'draw_stroke',
+    description: 'Desenha um traço do lápis 3D (Grease Pencil) por uma lista de pontos 3D — storyboards e anotações.',
+    input_schema: { type: 'object', properties: { points: { type: 'array', items: vec3, minItems: 2 }, color: { type: 'string' }, width: { type: 'number' }, fill: { type: 'boolean' } }, required: ['points'] },
+    ui: 'viewport',
+  },
+  {
+    name: 'add_simulation',
+    description: 'Adiciona simulação: fluid (líquido), smoke, fire (volumes), ocean (ondas), softbody (corpo mole no alvo) ou hair (cabelo no alvo).',
+    input_schema: { type: 'object', properties: { type: { type: 'string', enum: ['fluid', 'smoke', 'fire', 'ocean', 'softbody', 'hair'] }, target, position: vec3, color: { type: 'string' } }, required: ['type'] },
+    ui: 'add',
+  },
+  {
+    name: 'simulate',
+    description: 'Inicia/pausa ou reinicia as simulações de efeitos.',
+    input_schema: { type: 'object', properties: { running: { type: 'boolean' }, reset: { type: 'boolean' } } },
+    ui: 'viewport',
+  },
+  {
+    name: 'add_constraint',
+    description: 'Adiciona restrição: track (olhar para), copyloc, copyrot, follow (seguir uma curva), limitdist, floor.',
+    input_schema: { type: 'object', properties: { target, type: { type: 'string', enum: ['track', 'copyloc', 'copyrot', 'follow', 'limitdist', 'floor'] }, to: { type: 'string', description: 'objeto alvo da restrição' }, params: { type: 'object' } }, required: ['target', 'type'] },
+    ui: 'viewport',
+  },
+  {
+    name: 'add_ik',
+    description: 'Adiciona IK (cinemática inversa) a uma malha com esqueleto; cria um alvo móvel.',
+    input_schema: { type: 'object', properties: { target }, required: ['target'] },
+    ui: 'viewport',
+  },
+  {
+    name: 'add_modifier_stack',
+    description: 'Adiciona modificador não destrutivo: subsurf, mirror, array, solidify, twist, smooth, cast, bend, taper, decimate, remesh, shrinkwrap, triangulate, weld, displace.',
+    input_schema: { type: 'object', properties: { target, type: { type: 'string', enum: ['subsurf', 'mirror', 'array', 'solidify', 'twist', 'smooth', 'cast', 'bend', 'taper', 'decimate', 'remesh', 'shrinkwrap', 'triangulate', 'weld', 'displace'] }, params: { type: 'object' } }, required: ['target', 'type'] },
+    ui: 'viewport',
+  },
+  {
+    name: 'compositor',
+    description: 'Liga/ajusta um efeito de pós-processamento: color, vignette, chroma, grain, lens, sharpen, pixelate, dof, ao.',
+    input_schema: { type: 'object', properties: { effect: { type: 'string', enum: ['color', 'vignette', 'chroma', 'grain', 'lens', 'sharpen', 'pixelate', 'dof', 'ao'] }, enabled: { type: 'boolean' }, params: { type: 'object' } }, required: ['effect'] },
+    ui: 'world',
+  },
 ];
 
 export const TOOL_NAMES = TOOLS.map((t) => t.name);

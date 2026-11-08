@@ -9,6 +9,20 @@ import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
 import { OBJLoader } from 'three/addons/loaders/OBJLoader.js';
 import { FBXLoader } from 'three/addons/loaders/FBXLoader.js';
 import { STLLoader } from 'three/addons/loaders/STLLoader.js';
+import { USDZExporter } from 'three/addons/exporters/USDZExporter.js';
+import { PLYExporter } from 'three/addons/exporters/PLYExporter.js';
+import { PLYLoader } from 'three/addons/loaders/PLYLoader.js';
+import { ThreeMFLoader } from 'three/addons/loaders/3MFLoader.js';
+import { ColladaLoader } from 'three/addons/loaders/ColladaLoader.js';
+import { USDLoader } from 'three/addons/loaders/USDLoader.js';
+import { VRMLLoader } from 'three/addons/loaders/VRMLLoader.js';
+import { TDSLoader } from 'three/addons/loaders/TDSLoader.js';
+import { AMFLoader } from 'three/addons/loaders/AMFLoader.js';
+import { rehydrateFeatures } from '../features/rehydrate.js';
+
+// Formatos do pipeline (como glTF/USD/Alembic no Blender). Alembic (.abc) não tem leitor/escritor web confiável.
+export const EXPORT_FORMATS = ['glb', 'gltf', 'obj', 'stl', 'ply', 'usdz'];
+export const IMPORT_FORMATS = ['glb', 'gltf', 'obj', 'fbx', 'stl', 'ply', '3mf', 'dae', 'usdz', 'usda', 'usdc', 'usd', 'wrl', '3ds', 'amf'];
 import { content, addToScene, makeMaterial } from '../core/objects.js';
 import { state, bus, nextId, select } from '../core/state.js';
 import { applyEnvironment } from '../core/viewport.js';
@@ -55,6 +69,8 @@ export async function exportData(fmt, objects) {
   }
   if (fmt === 'obj') return { data: new OBJExporter().parse(root), binary: false };
   if (fmt === 'stl') return { data: new STLExporter().parse(root), binary: false };
+  if (fmt === 'usdz') { root.updateMatrixWorld(true); return { data: new Uint8Array(await new USDZExporter().parseAsync(root)), binary: true }; }
+  if (fmt === 'ply') { const out = await new Promise((r) => new PLYExporter().parse(root, r, { binary: true })); return { data: new Uint8Array(out), binary: true }; }
   throw new Error('Formato desconhecido: ' + fmt);
 }
 
@@ -64,7 +80,7 @@ export async function exportModel(fmt) {
 }
 
 export async function importModel() {
-  const f = await open([{ name: 'Modelos 3D', extensions: ['glb', 'gltf', 'obj', 'fbx', 'stl'] }], '.glb,.gltf,.obj,.fbx,.stl');
+  const f = await open([{ name: 'Modelos 3D', extensions: IMPORT_FORMATS }], IMPORT_FORMATS.map((e) => '.' + e).join(','));
   if (!f) return null;
   const ext = f.name.split('.').pop().toLowerCase();
   const buf = f.data.buffer.slice(f.data.byteOffset, f.data.byteOffset + f.data.byteLength);
@@ -73,6 +89,14 @@ export async function importModel() {
   else if (ext === 'obj') obj = new OBJLoader().parse(new TextDecoder().decode(buf));
   else if (ext === 'fbx') obj = new FBXLoader().parse(buf, '');
   else if (ext === 'stl') obj = new THREE.Mesh(new STLLoader().parse(buf), makeMaterial());
+  else if (ext === 'ply') { const g = new PLYLoader().parse(buf); if (!g.index && !g.attributes.normal) g.computeVertexNormals(); const m = makeMaterial(); if (g.attributes.color) m.vertexColors = true; obj = g.index || g.attributes.position.count % 3 === 0 ? new THREE.Mesh(g, m) : new THREE.Points(g, new THREE.PointsMaterial({ size: 0.01, vertexColors: !!g.attributes.color })); }
+  else if (ext === '3mf') obj = new ThreeMFLoader().parse(buf);
+  else if (ext === 'dae') obj = new ColladaLoader().parse(new TextDecoder().decode(buf), '').scene;
+  else if (['usdz', 'usda', 'usdc', 'usd'].includes(ext)) obj = new USDLoader().parse(buf, '');
+  else if (ext === 'wrl') obj = new VRMLLoader().parse(new TextDecoder().decode(buf), '');
+  else if (ext === '3ds') obj = new TDSLoader().parse(buf, '');
+  else if (ext === 'amf') obj = new AMFLoader().parse(buf);
+  if (!obj) throw new Error('Formato não suportado: .' + ext);
   // Normaliza escala: cabe numa caixa de ~2 unidades e apoia no chão.
   const box = new THREE.Box3().setFromObject(obj); const size = box.getSize(new THREE.Vector3()).length();
   if (size > 0) { const s = 2.5 / size; obj.scale.multiplyScalar(s); }
@@ -111,7 +135,7 @@ export async function loadProject(p) {
   select(null);
   [...content.children].forEach((c) => { c.userData.dispose?.(); content.remove(c); });
   [...root.children].forEach((c) => content.add(c));
-  rehydrateVFX(); rehydrateModifiers();
+  rehydrateVFX(); rehydrateModifiers(); rehydrateFeatures(content);
   applyEnvironment(p.env || {});
   loadAnim(p.anim); loadVideo(p.video);
   bus.emit('scene:changed');

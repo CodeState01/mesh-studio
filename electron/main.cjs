@@ -9,6 +9,7 @@ const fs = require('node:fs');
 const { startBridge } = require('./bridge.cjs');
 const { setupUpdater } = require('./updater.cjs');
 const agents = require('./agents.cjs');
+const { registerAccounts } = require('./accounts.cjs');
 // Instalado: servidor MCP empacotado (1 arquivo, fora do app.asar). Em desenvolvimento: o código-fonte.
 const MCP_SERVER = () => (app.isPackaged ? path.join(process.resourcesPath, 'mcp', 'server.cjs') : path.join(__dirname, '..', 'mcp', 'server.mjs'));
 
@@ -145,6 +146,7 @@ app.whenReady().then(() => {
   // Ponte MCP: o servidor MCP (stdio) conecta aqui e as chamadas de ferramenta
   // são repassadas ao renderer, que executa na cena e devolve o resultado.
   bridge = startBridge({ getWindow: () => win, ipcMain });
+  registerAccounts(ipcMain, () => win);
   // A versão portátil não se atualiza sozinha (só o instalador); ela avisa via link de download.
   setupUpdater({ getWindow: () => win, ipcMain, enabled: app.isPackaged && !process.env.PORTABLE_EXECUTABLE_DIR });
 });

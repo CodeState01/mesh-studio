@@ -505,3 +505,69 @@ body.popout { background: var(--bg1); overflow: hidden; }
 /* com a barrinha de arrastar dentro, ":empty" não funciona mais — escondemos quando não há conteúdo real */
 #op-panel:not(:has(h4)) { display: none; }
 #tool-dock:not(:has(.dock-btn)) { display: none; }
+
+/* ---------- Contas (todos os provedores) ---------- */
+.set-content h3 { display: flex; align-items: center; gap: 8px; margin: 22px 0 10px; font: 600 14px var(--display); color: var(--text); }
+.acc-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(290px, 1fr)); gap: 8px; margin-top: 10px; }
+.acc-card { display: flex; align-items: center; gap: 10px; padding: 9px 10px; border-radius: 12px; border: 1px solid var(--line); background: var(--bg1); transition: border-color .15s; }
+.acc-card:hover { border-color: var(--line2); }
+.acc-card.ok { border-color: color-mix(in srgb, var(--ok) 45%, transparent); }
+.acc-meta { flex: 1; min-width: 0; display: flex; flex-direction: column; }
+.acc-meta b { font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.acc-meta small { color: var(--mute); font-size: 11px; } .acc-card.ok .acc-meta small { color: var(--ok); }
+.acc-act { display: flex; align-items: center; gap: 4px; }
+.plogo.img { background: #fff; overflow: hidden; box-shadow: none; }
+.plogo svg { display: block; }
+
+/* ---------- Pontos de calor ---------- */
+.heat-legend { position: absolute; left: 50%; bottom: 96px; transform: translateX(-50%); z-index: 12; min-width: 260px; padding: 9px 12px 8px; border-radius: 12px; background: var(--glass); backdrop-filter: blur(12px); box-shadow: var(--shadow); font-size: 12px; pointer-events: none; animation: fadeUp .25s var(--ease-out); }
+.heat-legend b { display: block; margin-bottom: 5px; }
+.heat-bar { height: 8px; border-radius: 4px; background: linear-gradient(90deg, #30123b, #1a73f2, #1ad9bf, #8cf240, #fabf26, #d9260d); }
+.heat-lbl { display: flex; justify-content: space-between; color: var(--text2); font: 11px var(--mono); margin-top: 3px; }
+.heat-legend small { color: var(--mute); }
+
+/* ---------- Ciclos (path tracing) ---------- */
+.pt-badge { position: absolute; top: 108px; left: 50%; transform: translateX(-50%); z-index: 12; padding: 4px 12px; border-radius: 999px; background: var(--glass); box-shadow: var(--shadow); font: 600 11.5px var(--mono); color: var(--accent); pointer-events: none; }
+
+/* ---------- Nós de geometria ---------- */
+.gn-editor { left: 300px; right: 320px; bottom: 90px; height: 46vh; min-height: 300px; display: flex; flex-direction: column; overflow: hidden; z-index: 30; }
+.gn-head { display: flex; align-items: center; gap: 8px; padding: 8px 10px; border-bottom: 1px solid var(--line); }
+.gn-head .spacer { flex: 1; } .field.sm { height: 28px; width: auto; font-size: 12px; padding: 0 8px; }
+.gn-canvas { position: relative; flex: 1; overflow: hidden; background-color: rgba(0,0,0,.25); background-image: radial-gradient(rgba(255,255,255,.07) 1px, transparent 1px); background-size: 22px 22px; }
+.gn-wires { position: absolute; inset: 0; width: 100%; height: 100%; }
+.gn-wires path { fill: none; stroke: #b9bcc4; stroke-width: 2.2; pointer-events: stroke; cursor: pointer; }
+.gn-wires path:hover { stroke: var(--x); } .gn-wires path.temp { stroke: var(--accent); stroke-dasharray: 5 4; pointer-events: none; }
+.gn-nodes { position: absolute; inset: 0; pointer-events: none; }
+.gn-node { position: absolute; left: 0; top: 0; width: 180px; border-radius: 10px; background: var(--bg2); box-shadow: 0 6px 20px rgba(0,0,0,.4), 0 0 0 1px var(--line2); pointer-events: auto; font-size: 11.5px; }
+.gn-title { padding: 6px 9px; border-radius: 10px 10px 0 0; background: color-mix(in srgb, var(--nc) 55%, var(--bg3)); font-weight: 600; display: flex; align-items: center; cursor: grab; user-select: none; }
+.gn-del { margin-left: auto; width: 18px; height: 18px; border-radius: 5px; line-height: 1; } .gn-del:hover { background: rgba(0,0,0,.3); }
+.gn-sock { position: relative; display: flex; align-items: center; gap: 6px; padding: 3px 10px; color: var(--text2); }
+.gn-sock.out { justify-content: flex-end; }
+.gn-sock i { position: absolute; width: 11px; height: 11px; border-radius: 50%; border: 2px solid var(--bg2); cursor: crosshair; }
+.gn-sock.out i { right: -6px; } .gn-sock.in i { left: -6px; }
+.gn-sock i.geo { background: #2fd5a4; } .gn-sock i.pts { background: #f0a84b; }
+.gn-param { display: flex; align-items: center; justify-content: space-between; gap: 6px; padding: 2px 9px; color: var(--mute); }
+.gn-param input, .gn-param select { width: 74px; height: 22px; background: rgba(0,0,0,.3); border: 1px solid var(--line2); border-radius: 6px; color: var(--text); font: 11px var(--font); padding: 0 5px; }
+.gn-hint { padding: 5px 10px; font-size: 11px; color: var(--mute); border-top: 1px solid var(--line); }
+
+/* ---------- Compositor ---------- */
+.comp-list { max-height: 64vh; overflow: auto; }
+.comp-fx { border: 1px solid var(--line); border-radius: 10px; padding: 7px 10px; margin-bottom: 6px; } .comp-fx.on { border-color: var(--line2); background: rgba(0,0,0,.15); }
+.comp-h { display: flex; align-items: center; gap: 8px; cursor: pointer; }
+.comp-row { display: grid; grid-template-columns: 80px 1fr 56px; align-items: center; gap: 8px; margin-top: 4px; font-size: 12px; color: var(--text2); }
+.comp-row output { font: 11px var(--mono); text-align: right; }
+
+/* ---------- Rastreamento ---------- */
+.tr-bar { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; margin-bottom: 10px; }
+.tr-chk { display: flex; align-items: center; gap: 5px; font-size: 12px; color: var(--text2); }
+.tr-stage { position: relative; display: grid; place-items: center; min-height: 360px; border-radius: 14px; background: #000; overflow: hidden; }
+.tr-stage canvas { max-width: 100%; max-height: 62vh; cursor: crosshair; }
+.tr-empty { position: absolute; display: flex; flex-direction: column; align-items: center; gap: 10px; color: var(--mute); }
+.tr-foot { display: flex; align-items: center; gap: 12px; margin-top: 10px; } .tr-foot input { flex: 1; }
+
+/* ---------- Console Python ---------- */
+.py-console { width: min(760px, 94vw); }
+.py-console .modal-h { display: flex; align-items: center; gap: 8px; } .py-console .spacer { flex: 1; }
+.py-out { height: 42vh; overflow: auto; padding: 10px 14px; background: #0a0b0c; font: 12px/1.55 var(--mono); white-space: pre-wrap; }
+.py-line.cmd { color: var(--accent); } .py-line.err { color: var(--x); } .py-line.ok { color: var(--ok); } .py-line.muted { color: var(--mute); }
+#py-in { width: 100%; border: 0; border-top: 1px solid var(--line2); background: #101113; color: var(--text); font: 12.5px/1.5 var(--mono); padding: 10px 14px; resize: vertical; outline: none; }

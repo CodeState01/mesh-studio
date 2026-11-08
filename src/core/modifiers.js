@@ -1,7 +1,8 @@
 // Modificadores destrutivos (aplicados na geometria), com undo.
 import * as THREE from 'three';
 import { TessellateModifier } from 'three/addons/modifiers/TessellateModifier.js';
-import { SimplifyModifier } from 'three/addons/modifiers/SimplifyModifier.js';
+import { EditMesh } from './editmesh.js';
+import { decimate as decimateEM } from './modstack.js';
 import * as BufferGeometryUtils from 'three/addons/utils/BufferGeometryUtils.js';
 import { history } from './history.js';
 import { content, addToScene } from './objects.js';
@@ -60,10 +61,8 @@ export function applyModifier(mesh, type, o = {}) {
       const geo = new TessellateModifier(o.amount ?? 0.15, 6).modify(g);
       setGeometry(mesh, geo, 'Subdividir'); return { vertices: geo.attributes.position.count };
     }
-    case 'decimate': {
-      const g = BufferGeometryUtils.mergeVertices(mesh.geometry.clone());
-      const n = Math.floor(g.attributes.position.count * Math.min(0.95, o.amount ?? 0.5));
-      const geo = new SimplifyModifier().modify(g, n);
+    case 'decimate': { // síncrono (o SimplifyModifier do three r187 virou assíncrono)
+      const geo = decimateEM(EditMesh.fromGeometry(mesh.geometry), 1 - Math.min(0.95, o.amount ?? 0.5)).toGeometry();
       setGeometry(mesh, geo, 'Decimar'); return { vertices: geo.attributes.position.count };
     }
     case 'twist': {

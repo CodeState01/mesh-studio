@@ -27,6 +27,12 @@ contextBridge.exposeInMainWorld('meshApp', {
     stop: (runId) => ipcRenderer.invoke('agents:stop', runId),
     onEvent: (cb) => ipcRenderer.on('agents:event', (_e, d) => cb(d)),
   },
+  accounts: {
+    oauth: (id) => ipcRenderer.invoke('accounts:oauth', id),
+    keyPage: (url) => ipcRenderer.invoke('accounts:keyPage', url),
+    detectLocal: (list) => ipcRenderer.invoke('accounts:detectLocal', list),
+    clearSession: () => ipcRenderer.invoke('accounts:clearSession'),
+  },
   mcp: {
     onCall: (cb) => ipcRenderer.on('mcp:call', (_e, d) => cb(d)),
     onStatus: (cb) => ipcRenderer.on('mcp:status', (_e, d) => cb(d)),

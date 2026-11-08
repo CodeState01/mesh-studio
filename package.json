@@ -1,7 +1,7 @@
 {
   "name": "mesh-studio",
   "productName": "Mesh",
-  "version": "0.3.0",
+  "version": "0.4.0",
   "description": "Mesh — 3D modeling, sculpting, animation, VFX/SFX and video editing with AI (MCP, 70+ providers, local models, or your own Gemini/Claude account).",
   "author": {
     "name": "CodeState01",
@@ -23,6 +23,7 @@
   "dependencies": {
     "@codemirror/lang-javascript": "^6.2.5",
     "@codemirror/theme-one-dark": "^6.1.3",
+    "@lobehub/icons-static-svg": "^1.102.0",
     "@modelcontextprotocol/sdk": "^1.12.0",
     "cannon-es": "^0.20.0",
     "codemirror": "^6.0.2",
@@ -31,6 +32,7 @@
     "simple-icons": "^16.36.0",
     "three": "^0.187.0",
     "three-bvh-csg": "^0.0.18",
+    "three-gpu-pathtracer": "^0.0.28",
     "three-mesh-bvh": "^0.9.18",
     "ws": "^8.18.0",
     "zod": "^3.23.8"

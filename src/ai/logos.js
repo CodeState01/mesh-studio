@@ -1,38 +1,50 @@
-// Logos dos provedores de IA. Usa Simple Icons (CC0) quando a marca existe lá;
-// senão, um selo com a inicial na cor da marca. Logos só identificam o serviço.
-// Importações nomeadas: o bundler inclui SÓ estes logos (o pacote inteiro tem 3.000+ marcas).
-import {
-  siAnthropic, siGooglegemini, siMistralai, siHuggingface, siNvidia, siOllama, siCloudflare, siGithub, siPerplexity, siVercel,
-  siDeepseek, siQwen, siBaidu, siTencenthy, siBytedance, siMinimax, siOpenrouter, siLmstudio, siVllm, siMoonshotai, siX, siScaleway, siOvh, siClaude,
-} from 'simple-icons';
+// Logos dos provedores de IA, em 3 camadas (todas só identificam o serviço):
+//   1. LobeHub Icons (MIT) — coleção dedicada a marcas de IA (OpenAI, Groq, Cohere, Together…)
+//   2. Simple Icons (CC0) — marcas gerais (Scaleway, OVH…)
+//   3. Avatar oficial da organização no GitHub (src/assets/logos) — ferramentas locais sem SVG público
+// Sem nenhum dos três: selo com a inicial na cor da marca.
+import { siScaleway, siOvh, siOllama, siGithubcopilot } from 'simple-icons';
 
-const SI = {
-  anthropic: siAnthropic, gemini: siGooglegemini, mistral: siMistralai, huggingface: siHuggingface, nvidia: siNvidia,
-  ollama: siOllama, cloudflare: siCloudflare, github: siGithub, perplexity: siPerplexity, vercel: siVercel,
-  deepseek: siDeepseek, qwen: siQwen, qianfan: siBaidu, hunyuan: siTencenthy, volcengine: siBytedance,
-  minimax: siMinimax, openrouter: siOpenrouter, lmstudio: siLmstudio, vllm: siVllm, moonshot: siMoonshotai,
-  xai: siX, scaleway: siScaleway, ovh: siOvh,
-  'acct-gemini': siGooglegemini, 'acct-claude': siClaude,
+// Importação explícita (não o pacote inteiro): o bundle leva só estes ~70 SVGs.
+const LOBE = import.meta.glob([
+  '/node_modules/@lobehub/icons-static-svg/icons/{openai,anthropic,xai,groq,ai21,reka,nebius,lambda,chutes,friendli,parasail,inference,moonshot,vercel,ollama,lmstudio,github,githubcopilot,grok,codex}.svg',
+  '/node_modules/@lobehub/icons-static-svg/icons/{claude,gemini,mistral,deepseek,cohere,perplexity,upstage,cerebras,sambanova,together,fireworks,deepinfra,hyperbolic,novita,featherless,kluster,venice,siliconcloud,zhipu,qwen,minimax,stepfun,baichuan,yi,volcengine,wenxin,hunyuan,openrouter,azure,cloudflare,vllm,xinference,huggingface,nvidia,geminicli}-color.svg',
+], { query: '?raw', import: 'default', eager: true });
+const lobe = (name) => LOBE[`/node_modules/@lobehub/icons-static-svg/icons/${name}-color.svg`] || LOBE[`/node_modules/@lobehub/icons-static-svg/icons/${name}.svg`];
+const PNG = import.meta.glob('../assets/logos/*.{png,jpg}', { query: '?url', import: 'default', eager: true });
+const png = (id) => PNG[`../assets/logos/${id}.png`] || PNG[`../assets/logos/${id}.jpg`];
+
+// id do provedor → nome do ícone na LobeHub
+const LOBE_ID = {
+  openai: 'openai', anthropic: 'anthropic', gemini: 'gemini', xai: 'xai', mistral: 'mistral', deepseek: 'deepseek', cohere: 'cohere',
+  ai21: 'ai21', perplexity: 'perplexity', reka: 'reka', upstage: 'upstage', groq: 'groq', cerebras: 'cerebras', sambanova: 'sambanova',
+  together: 'together', fireworks: 'fireworks', deepinfra: 'deepinfra', hyperbolic: 'hyperbolic', novita: 'novita', nebius: 'nebius',
+  lambda: 'lambda', nvidia: 'nvidia', huggingface: 'huggingface', github: 'github', featherless: 'featherless', chutes: 'chutes',
+  friendli: 'friendli', kluster: 'kluster', parasail: 'parasail', inferencenet: 'inference', venice: 'venice', siliconflow: 'siliconcloud',
+  moonshot: 'moonshot', zhipu: 'zhipu', qwen: 'qwen', minimax: 'minimax', stepfun: 'stepfun', baichuan: 'baichuan', yi: 'yi',
+  volcengine: 'volcengine', qianfan: 'wenxin', hunyuan: 'hunyuan', openrouter: 'openrouter', vercel: 'vercel', azure: 'azure',
+  cloudflare: 'cloudflare', ollama: 'ollama', lmstudio: 'lmstudio', vllm: 'vllm', xinference: 'xinference',
+  'acct-gemini': 'geminicli', 'acct-claude': 'claude', 'acct-chatgpt': 'codex', 'acct-qwen': 'qwen', 'acct-copilot': 'githubcopilot',
 };
-// Cores aproximadas das marcas sem ícone livre (só para o selo com inicial).
+const SI = { scaleway: siScaleway, ovh: siOvh, ollama: siOllama, 'acct-copilot': siGithubcopilot };
+
+// Cores das marcas (para o fundo do selo e para ícones monocromáticos)
 const TINT = {
-  openai: '#10a37f', 'acct-chatgpt': '#10a37f', cohere: '#39594d', groq: '#f55036', cerebras: '#f15a29', sambanova: '#ee7624', together: '#0f6fff',
-  fireworks: '#6720ff', deepinfra: '#2e6bf5', hyperbolic: '#6366f1', novita: '#22c55e', nebius: '#d4f72e', lambda: '#7c3aed',
-  featherless: '#f59e0b', chutes: '#0ea5e9', friendli: '#3b82f6', kluster: '#14b8a6', parasail: '#0284c7', inferencenet: '#64748b',
-  venice: '#c0392b', siliconflow: '#7c3aed', zhipu: '#3859ff', stepfun: '#0052d9', baichuan: '#ff6a00', yi: '#00b386',
-  requesty: '#8b5cf6', portkey: '#111827', azure: '#0078d4', ai21: '#ec4899', reka: '#111111', upstage: '#805cfb', writer: '#3d3d3d',
-  llamacpp: '#a16207', sglang: '#ef4444', localai: '#22c55e', jan: '#2563eb', koboldcpp: '#9333ea', textgen: '#f97316',
-  tabby: '#eab308', gpt4all: '#0ea5e9', llamafile: '#65a30d', xinference: '#2563eb', tgi: '#ffcc4d', aphrodite: '#db2777',
-  lemonade: '#facc15', msty: '#6366f1', litellm: '#16a34a', custom: '#6b7280', demo: '#b9f23c',
+  openai: '#e8e8e8', 'acct-chatgpt': '#e8e8e8', anthropic: '#d97757', xai: '#e8e8e8', groq: '#f55036', ai21: '#ec4899', reka: '#e8e8e8',
+  nebius: '#d4f72e', lambda: '#a78bfa', chutes: '#0ea5e9', friendli: '#3b82f6', parasail: '#38bdf8', inferencenet: '#94a3b8',
+  moonshot: '#e8e8e8', vercel: '#e8e8e8', ollama: '#e8e8e8', lmstudio: '#6366f1', github: '#e8e8e8', 'acct-copilot': '#e8e8e8',
+  writer: '#3d3d3d', requesty: '#2563eb', portkey: '#e11d48', localai: '#22c55e', koboldcpp: '#9333ea', textgen: '#f97316',
+  gpt4all: '#0ea5e9', litellm: '#16a34a', msty: '#6366f1', custom: '#6b7280', demo: '#b9f23c',
 };
 
 export function providerLogo(p, size = 22) {
+  const box = (inner, c = TINT[p.id] || '#9aa0aa', cls = '') => `<span class="plogo ${cls}" style="--pc:${c};width:${size}px;height:${size}px">${inner}</span>`;
+  const svg = LOBE_ID[p.id] && lobe(LOBE_ID[p.id]);
+  if (svg) return box(svg.replace(/<title>.*?<\/title>/, '').replace(/height="1em"/, `height="${size * 0.64}"`).replace(/width="1em"/, `width="${size * 0.64}"`));
   const si = SI[p.id];
-  if (si) {
-    const hex = '#' + si.hex; const dark = parseInt(si.hex, 16) < 0x333333;
-    return `<span class="plogo" style="--pc:${dark ? '#e8e8e8' : hex};width:${size}px;height:${size}px"><svg viewBox="0 0 24 24" width="${size * 0.62}" height="${size * 0.62}" fill="currentColor"><path d="${si.path}"/></svg></span>`;
-  }
-  const c = TINT[p.id] || '#6b7280';
+  if (si) { const dark = parseInt(si.hex, 16) < 0x333333; return box(`<svg viewBox="0 0 24 24" width="${size * 0.62}" height="${size * 0.62}" fill="currentColor"><path d="${si.path}"/></svg>`, dark ? '#e8e8e8' : '#' + si.hex); }
+  const img = png(p.id);
+  if (img) return box(`<img src="${img}" alt="" width="${size}" height="${size}" style="border-radius:7px;display:block">`, '#ffffff', 'img');
   const letter = p.id === 'demo' ? '◆' : (p.name.match(/[A-Za-z0-9]/)?.[0] || '?').toUpperCase();
-  return `<span class="plogo mono" style="--pc:${c};width:${size}px;height:${size}px;font-size:${size * 0.48}px">${letter}</span>`;
+  return `<span class="plogo mono" style="--pc:${TINT[p.id] || '#6b7280'};width:${size}px;height:${size}px;font-size:${size * 0.48}px">${letter}</span>`;
 }

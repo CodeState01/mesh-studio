@@ -17,7 +17,9 @@ import { history } from './history.js';
 export const scene = new THREE.Scene();
 export let renderer, camera, orbit, gizmo, composer, bloomPass, outlinePass, viewHelper;
 export const frameHooks = new Set(); // (dt, t) => void — VFX, timeline, etc.
-let renderCamera = null; // câmera da cena usada no modo "ver pela câmera"
+let renderCamera = null;
+let renderOverride = null; // ex.: path tracing (Ciclos) assume o desenho do viewport
+export function setRenderOverride(fn) { renderOverride = fn; } // câmera da cena usada no modo "ver pela câmera"
 let container;
 
 const SKIES = {
@@ -137,14 +139,14 @@ export function initViewport(el) {
     frameHooks.forEach((fn) => fn(dt));
     if (viewHelper.animating) viewHelper.update(dt);
     orbit.update();
-    renderFrame();
+    if (renderOverride) renderOverride(dt); else renderFrame();
   });
 }
 
 export function renderFrame(cam = renderCamera || camera) {
   const pass = composer.passes[0]; pass.camera = cam; outlinePass.renderCamera = cam;
   renderer.autoClear = true;
-  if (state.shading === 'wire' || state.shading === 'solid') {
+  if (state.shading === 'wire' || state.shading === 'solid' || state.shading === 'depth' || state.shading === 'normal') {
     bloomPass.enabled = false;
   } else bloomPass.enabled = state.env.bloom > 0;
   composer.render();
@@ -178,12 +180,13 @@ function setupPicking() {
   el.addEventListener('pointerup', (e) => {
     if (!down || e.button !== 0) return;
     const moved = Math.hypot(e.clientX - down.x, e.clientY - down.y) > 4; down = null;
-    if (moved || gizmo.dragging || state.workspace === 'sculpt') return;
+    if (moved || gizmo.dragging || state.workspace === 'sculpt' || state.workspace === 'draw' || state.blockPick) return;
     // Clique no ViewHelper (canto inferior direito)
     const r = el.getBoundingClientRect();
     if (e.clientX > r.right - 128 && e.clientY > r.bottom - 128) { viewHelper.handleClick(e); return; }
     if (state.mode === 'edit') { bus.emit('edit:click', e); return; }
     if (state.mode === 'pose') { bus.emit('pose:click', e); return; }
+    if (state.mode === 'curve') { bus.emit('curve:click', e); return; }
     if (state.tool === 'measure' || state.tool === 'cursor') { bus.emit('viewport:click', e); return; }
     const hit = pickAt(e.clientX, e.clientY).find((h) => !h.object.userData.noPick);
     const obj = hit ? topLevel(hit.object) : null;
@@ -233,6 +236,8 @@ export function setShading(mode) {
   state.shading = mode;
   if (mode === 'wire') scene.overrideMaterial = new THREE.MeshBasicMaterial({ color: '#9aa0aa', wireframe: true });
   else if (mode === 'solid') scene.overrideMaterial = new THREE.MeshStandardMaterial({ color: '#b4b7bd', roughness: 0.85, metalness: 0 });
+  else if (mode === 'depth') scene.overrideMaterial = new THREE.MeshDepthMaterial();
+  else if (mode === 'normal') scene.overrideMaterial = new THREE.MeshNormalMaterial();
   else scene.overrideMaterial = null;
   renderer.shadowMap.enabled = mode !== 'wire';
   bus.emit('shading', mode);

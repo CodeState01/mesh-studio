@@ -12,7 +12,7 @@ import { toggleFly, isFlying } from '../core/fly.js';
 import { PANELS, popOut, resetLayout } from './layout.js';
 import { startModal, isModal, cursorToSelection, cursorToOrigin, selectionToCursor, clearMeasures } from '../core/precision.js';
 import { booleanOp } from '../core/boolean.js';
-import { sculpt, BRUSHES, prepareForSculpt } from '../core/sculpt.js';
+import { sculpt, BRUSHES, BRUSH_ICON, prepareForSculpt } from '../core/sculpt.js';
 import { unwrap, paint, exportPaintTexture } from '../core/uv.js';
 import { autoRig, togglePose, resetPose } from '../core/rig.js';
 import { startSim, stopSim, bake, physics, makeCloth, resetCloth } from '../core/physics.js';
@@ -56,10 +56,10 @@ export function navigate(id, section) {
   if (state.mode === 'pose' && ws.id !== 'animate') togglePose();
   state.workspace = ws.id;
   document.querySelectorAll('#workspaces [data-ws]').forEach((b) => b.classList.toggle('on', b.dataset.ws === ws.id));
-  const showBottom = ['animate', 'vfx', 'video'].includes(ws.id);
+  const showBottom = ['animate', 'vfx', 'video', 'draw'].includes(ws.id);
   $('#bottom').classList.toggle('hidden', !showBottom);
   document.documentElement.style.setProperty('--bottom-h', ws.id === 'video' ? '290px' : '230px');
-  if (ws.id === 'sculpt' || ws.id === 'paint') setTool('select'); else if (state.tool === 'select' && ws.id !== 'video') setTool('move');
+  if (ws.id === 'sculpt' || ws.id === 'paint' || ws.id === 'draw') setTool('select'); else if (state.tool === 'select' && ws.id !== 'video') setTool('move');
   $('#crumb').innerHTML = `${icon(ws.icon, 14)}<b>${ws.label}</b>`;
   bus.emit('workspace', ws.id); renderDock(); renderPrecision();
 }
@@ -151,8 +151,8 @@ function registerAll() {
   R('new', 'Novo projeto', () => { if (confirm('Descartar a cena atual?')) loadProject({ version: 1, scene: { metadata: { version: 4.6, type: 'Object' }, object: { type: 'Group', uuid: crypto.randomUUID(), children: [] } } }); }, 'Ctrl+N', 'Arquivo', 'file');
   R('open', 'Abrir projeto…', openProject, 'Ctrl+O', 'Arquivo', 'folder');
   R('save', 'Salvar projeto…', async () => { if (await saveProject()) toast('Projeto salvo'); }, 'Ctrl+S', 'Arquivo', 'save');
-  R('import', 'Importar modelo…', importModel, 'Ctrl+I', 'Arquivo', 'upload', 'glTF, OBJ, FBX, STL');
-  for (const f of ['glb', 'gltf', 'obj', 'stl']) R('export-' + f, `Exportar ${f.toUpperCase()}`, () => exportModel(f), null, 'Arquivo', 'download');
+  R('import', 'Importar modelo…', importModel, 'Ctrl+I', 'Arquivo', 'upload', 'glTF, OBJ, FBX, STL, PLY, 3MF, DAE, USD/USDZ, VRML, 3DS, AMF');
+  for (const f of ['glb', 'gltf', 'obj', 'stl', 'ply', 'usdz']) R('export-' + f, `Exportar ${f.toUpperCase()}`, () => exportModel(f), null, 'Arquivo', 'download');
   R('restore', 'Recuperar autosave', () => { if (!restoreAutosave()) toast('Nenhum autosave encontrado'); }, null, 'Arquivo', 'refresh');
   R('render', 'Renderizar imagem (Full HD)', () => renderImage(), 'F12', 'Render', 'aperture');
   R('render-4k', 'Renderizar imagem 4K', () => renderImage(3840, 2160), null, 'Render', 'aperture');
@@ -211,7 +211,7 @@ function registerAll() {
   R('shade-flat', 'Sombreamento facetado', () => (state.mode === 'edit' ? ops.shade(false) : setSmooth(false)), null, 'Modelagem', 'face');
   R('boolean', 'Booleana…', openBoolean, 'Ctrl+Shift+B', 'Modelagem', 'boolean');
   // Escultura / pintura / UV
-  BRUSHES.forEach(([id, n]) => R('brush-' + id, 'Pincel: ' + n, () => { navigate('sculpt'); sculpt.brush = id; renderDock(); }, null, 'Escultura', { inflate: 'inflate', deflate: 'dig', grab: 'grab', smooth: 'smooth', flatten: 'flatten' }[id]));
+  BRUSHES.forEach(([id, n]) => R('brush-' + id, 'Pincel: ' + n, () => { navigate('sculpt'); sculpt.brush = id; renderDock(); }, null, 'Escultura', BRUSH_ICON[id]));
   R('sculpt-prepare', 'Mais detalhe para esculpir', () => prepareForSculpt(), null, 'Escultura', 'mesh');
   [['smart', 'Inteligente'], ['box', 'Caixa'], ['planar', 'Planar'], ['sphere', 'Esférico'], ['cylinder', 'Cilíndrico']].forEach(([m, n]) => R('uv-' + m, 'Desdobrar UV: ' + n, () => unwrap(state.selected, m), m === 'smart' ? 'U' : null, 'UV e Pintura', 'uv'));
   R('paint-export', 'Exportar textura pintada', exportPaintTexture, null, 'UV e Pintura', 'download');
@@ -230,7 +230,9 @@ function registerAll() {
   R('view-right', 'Vista lateral', () => viewAxis('right'), 'Numpad3', 'Exibir', 'axis');
   R('view-top', 'Vista de cima', () => viewAxis('top'), 'Numpad7', 'Exibir', 'axis');
   R('look-through', 'Ver pela câmera', lookThroughToggle, 'Numpad0', 'Exibir', 'camera');
-  [['wire', 'Arame', 'wire'], ['solid', 'Sólido', 'solid'], ['material', 'Material', 'material'], ['render', 'Render', 'render']].forEach(([m, n, ic], i) => R('shade-' + m, 'Visual: ' + n, () => setShading(m), `Shift+${i + 1}`, 'Exibir', ic));
+  [['wire', 'Arame', 'wire'], ['solid', 'Sólido', 'solid'], ['material', 'Material', 'material'], ['render', 'Render', 'render'], ['cycles', 'Ciclos (path tracing)', 'Sparkles']].forEach(([m, n, ic], i) => R('shade-' + m, 'Visual: ' + n, () => setShading(m), `Shift+${i + 1}`, 'Exibir', ic));
+  R('shade-depth', 'Passe: profundidade', () => setShading('depth'), null, 'Render', 'Layers');
+  R('shade-normal', 'Passe: normais', () => setShading('normal'), null, 'Render', 'Compass');
   R('toggle-ai', 'Assistente de IA', toggleAI, 'Ctrl+.', 'Exibir', 'bot');
   R('toggle-panels', 'Mostrar/ocultar painéis', togglePanels, 'Ctrl+Space', 'Exibir', 'expand');
   // Animação / vídeo
@@ -253,6 +255,7 @@ function registerAll() {
   R('unhide', 'Mostrar tudo', () => { const all = []; content.traverse((o) => { if (o.userData.id && !o.visible) all.push(o); }); setHidden(all, false); }, 'Alt+H', 'Exibir', 'eye');
   R('isolate', 'Isolar seleção (ocultar o resto)', () => setHidden(content.children.filter((o) => !state.selection.includes(o) && o.visible), true), 'Shift+H', 'Exibir', 'Focus');
   R('origin-cursor', 'Origem no cursor 3D', originToCursor, null, 'Editar', 'cursor3d');
+  COMMAND_HOOKS.forEach((fn) => fn(R));
   bus.on('cmd', (id) => runCommand(id));
   bus.on('navigate', ({ page, section }) => navigate(page, section));
 }
@@ -327,12 +330,12 @@ const menuHTML = (items) => items.map((id) => {
   const c = commands.get(id); return c ? `<button data-cmd="${id}">${icon(c.icon || 'dot', 16)}<span>${c.label}</span>${c.keys ? `<kbd>${c.keys}</kbd>` : ''}</button>` : '';
 }).join('');
 function openAddMenu(x, y) {
-  const base = ['#Formas', ...PRIMITIVES.map((p) => 'add-' + p), 'add-text', '#Luz e câmera', ...Object.keys(LIGHT_LABEL).map((l) => 'add-light-' + l), 'add-camera', '#Efeitos', ...VFX_TYPES.map((v) => 'add-vfx-' + v)];
+  const base = ['#Formas', ...PRIMITIVES.map((p) => 'add-' + p), 'add-text', '#Curvas e desenho', 'add-curve-bezier', 'add-curve-path', 'add-curve-circle', 'add-curve-spiral', 'add-curve-helix', 'add-pencil', '#Simulação', 'add-sim-fluid', 'add-sim-smoke', 'add-sim-fire', 'add-sim-ocean', '#Luz e câmera', ...Object.keys(LIGHT_LABEL).map((l) => 'add-light-' + l), 'add-camera', '#Efeitos', ...VFX_TYPES.map((v) => 'add-vfx-' + v)];
   const extra = [...commands.keys()].filter((k) => k.startsWith('add-') && !base.includes(k) && k !== 'add-menu');
   showPop(menuHTML([...base, ...(extra.length ? ['#Plugins', ...extra] : []), '-', 'import']), x, y);
 }
 function openAppMenu(x, y) {
-  showPop(menuHTML(['#Arquivo', 'new', 'open', 'save', 'import', 'export-glb', 'export-gltf', 'export-obj', 'export-stl', 'restore', '#Render', 'render', 'render-4k', '#Editar', 'undo', 'redo', 'group', 'ungroup', 'join', 'apply-transform', 'origin-geometry', '#Ajuda', 'go-commands', 'go-settings', 'mcp']), x, y);
+  showPop(menuHTML(['#Arquivo', 'new', 'open', 'save', 'import', 'export-glb', 'export-gltf', 'export-obj', 'export-stl', 'export-ply', 'export-usdz', 'restore', '#Render', 'render', 'render-4k', 'render-cycles', 'compositor', 'render-passes', '#Script', 'python', '#Editar', 'undo', 'redo', 'group', 'ungroup', 'join', 'apply-transform', 'origin-geometry', '#Ajuda', 'go-commands', 'go-settings', 'mcp']), x, y);
 }
 document.addEventListener('pointerdown', (e) => { if (openPop && !openPop.contains(e.target) && !e.target.closest('[data-anchor=add],#brand,.prov-picker,.pb-pop')) closePop(); });
 export { showPop, closePop };
@@ -406,20 +409,22 @@ function dockItems() {
   if (state.mode === 'pose') return [T('rotate', 'rotate', 'Girar osso', 'R'), T('move', 'move', 'Mover'), '|', C('keyframe', 'key', 'Keyframe', 'I'), C('pose-reset', 'refresh', 'Resetar'), '|', C('pose-mode', 'check', 'Sair do Pose')];
   switch (state.workspace) {
     case 'model': return [...transform, '|', C('add-menu', 'plus', 'Adicionar', '⇧A'), C('add-text', 'text', 'Texto'), '|', C('edit-mode', 'mesh', 'Editar', 'Tab'), C('boolean', 'boolean', 'Booleana'), C('join', 'merge', 'Juntar', '⌃J'), C('duplicate', 'copy', 'Duplicar', '⇧D'), C('delete', 'trash', 'Excluir', 'X')];
-    case 'sculpt': return [...BRUSHES.map(([id, n]) => ({ brush: id, ic: { inflate: 'inflate', deflate: 'dig', grab: 'grab', smooth: 'smooth', flatten: 'flatten' }[id], label: n })), '|', { slider: 'radius', obj: sculpt, label: 'Raio', min: 0.05, max: 1.5, step: 0.01 }, { slider: 'strength', obj: sculpt, label: 'Força', min: 0.05, max: 1, step: 0.01 }, '|', C('sculpt-prepare', 'mesh', 'Mais detalhe')];
+    case 'sculpt': return [...BRUSHES.map(([id, n]) => ({ brush: id, ic: BRUSH_ICON[id], label: n })), '|', { slider: 'radius', obj: sculpt, label: 'Raio', min: 0.05, max: 1.5, step: 0.01 }, { slider: 'strength', obj: sculpt, label: 'Força', min: 0.05, max: 1, step: 0.01 }, '|', C('sculpt-prepare', 'mesh', 'Mais detalhe')];
     case 'paint': return [{ ptool: 'brush', ic: 'paint', label: 'Pincel' }, { ptool: 'eraser', ic: 'Eraser', label: 'Borracha' }, { ptool: 'fill', ic: 'PaintBucket', label: 'Balde' }, '|', { color: true }, { slider: 'size', obj: paint, label: 'Tamanho', min: 2, max: 120, step: 1 }, { slider: 'opacity', obj: paint, label: 'Opacidade', min: 0.05, max: 1, step: 0.01 }, { slider: 'hardness', obj: paint, label: 'Dureza', min: 0, max: 0.95, step: 0.01 }, '|', C('uv-smart', 'uv', 'Desdobrar', 'U'), C('paint-export', 'download', 'Exportar')];
     case 'animate': return [...transform, '|', C('keyframe', 'key', 'Keyframe', 'I'), C('play', 'play', 'Play', '␣'), '|', C('pose-mode', 'pose', 'Pose', '⌃Tab'), C('sim-start', 'physics', physics.running ? 'Parar física' : 'Simular'), C('sim-bake', 'bake', 'Assar')];
     case 'vfx': return [T('move', 'move', 'Mover', 'G'), '|', ...VFX_TYPES.map((v) => C('add-vfx-' + v, v, VFX_LABEL[v]))];
-    default: return [];
+    default: return DOCKS[state.workspace]?.() || [];
   }
 }
+export const DOCKS = {}; // docks de workspaces adicionados por módulos (ex.: Desenhar)
+export const COMMAND_HOOKS = []; // módulos registram comandos extras aqui
 export function renderDock() {
   const dock = $('#tool-dock'); const items = dockItems();
   dock.innerHTML = items.map((it, i) => {
     if (it === '|') return '<i class="sep"></i>';
-    if (it.color) return `<input type="color" class="dock-color" data-color value="${paint.color}" data-tip-up data-tip="Cor">`;
+    if (it.color) return `<input type="color" class="dock-color" data-color="${i}" value="${it.obj ? it.obj[it.key] : paint.color}" data-tip-up data-tip="Cor">`;
     if (it.slider) return `<label class="dock-slider">${it.label} <input type="range" data-slider="${i}" min="${it.min}" max="${it.max}" step="${it.step}" value="${it.obj[it.slider]}"></label>`;
-    const on = (it.tool && it.tool === state.tool) || (it.brush && it.brush === sculpt.brush) || (it.mode && it.mode === edit.select) || (it.ptool && it.ptool === paint.tool);
+    const on = (it.tool && it.tool === state.tool) || (it.brush && it.brush === sculpt.brush) || (it.mode && it.mode === edit.select) || (it.ptool && it.ptool === paint.tool) || it.on;
     return `<button class="dock-btn ${on ? 'on' : ''}" data-i="${i}" ${it.cmd === 'add-menu' ? 'data-anchor="add"' : ''} ${it.cmd === 'add-text' ? 'data-anchor="tool-text"' : ''}>${icon(it.ic, 19)}<span>${it.label}</span>${it.key ? `<kbd>${it.key}</kbd>` : ''}</button>`;
   }).join('');
   dock.onclick = (e) => {
@@ -429,7 +434,7 @@ export function renderDock() {
     if (it.cmd) runCommand(it.cmd); if (it.brush) sculpt.brush = it.brush; if (it.mode) setSelectMode(it.mode); if (it.ptool) paint.tool = it.ptool;
     renderDock();
   };
-  dock.oninput = (e) => { if (e.target.dataset.color !== undefined) paint.color = e.target.value; const s = e.target.dataset.slider; if (s !== undefined) { const it = items[+s]; it.obj[it.slider] = +e.target.value; } };
+  dock.oninput = (e) => { if (e.target.dataset.color !== undefined) { const it = items[+e.target.dataset.color]; if (it?.obj) it.obj[it.key] = e.target.value; else paint.color = e.target.value; } const s = e.target.dataset.slider; if (s !== undefined) { const it = items[+s]; it.obj[it.slider] = +e.target.value; } };
 }
 
 // ---------- Ajustar última operação ----------
@@ -477,7 +482,7 @@ export function initShell() {
   bus.on('edit:select-mode', renderDock); bus.on('tool', () => { renderDock(); renderPrecision(); }); bus.on('physics', renderDock);
   bus.on('edit:op', renderOpPanel); bus.on('mode', (m) => m !== 'edit' && renderOpPanel(null));
 
-  $('#shading-seg').innerHTML = [['wire', 'wire', 'Arame'], ['solid', 'solid', 'Sólido'], ['material', 'material', 'Material'], ['render', 'render', 'Render']].map(([m, ic, n], i) => `<button data-s="${m}" data-tip="${n} (Shift+${i + 1})">${icon(ic, 16)}</button>`).join('');
+  $('#shading-seg').innerHTML = [['wire', 'wire', 'Arame'], ['solid', 'solid', 'Sólido'], ['material', 'material', 'Material'], ['render', 'render', 'Render'], ['cycles', 'Sparkles', 'Ciclos — path tracing']].map(([m, ic, n], i) => `<button data-s="${m}" data-tip="${n} (Shift+${i + 1})">${icon(ic, 16)}</button>`).join('');
   $('#shading-seg').onclick = (e) => { const b = e.target.closest('[data-s]'); if (b) setShading(b.dataset.s); };
   const vx = document.createElement('div'); vx.className = 'seg sm vertical'; vx.id = 'view-extra'; vx.style.marginTop = '4px';
   vx.innerHTML = `<button data-c="fly-toggle" data-tip="Voar: WASD + mouse (Shift+F ou segure o botão direito)">${icon('Plane', 16)}</button><button data-c="mesh-parts" data-tip="Mostrar partes das malhas (Alt+Z)">${icon('Grid3x3', 16)}</button><button data-c="frame" data-tip="Enquadrar (F)">${icon('frame', 16)}</button>`;

@@ -7,7 +7,7 @@ import { initPaint } from './core/uv.js';
 import { initFly } from './core/fly.js';
 import { initLayout } from './ui/layout.js';
 import { content, createPrimitive, createLight, createCamera, addToScene } from './core/objects.js';
-import { select, bus } from './core/state.js';
+import { select, bus, state } from './core/state.js';
 import { loadSettings, applyUIPrefs, settings } from './core/settings.js';
 import { initCursors } from './ui/cursors.js';
 import { initShell, navigate } from './ui/shell.js';
@@ -20,6 +20,10 @@ import { execWithCursor } from './ai/agent.js';
 import { loadPlugins } from './core/plugins.js';
 import { startAutosave } from './io/io.js';
 import { toast } from './ui/toast.js';
+import { initFeatures } from './features/index.js';
+import { runCommand } from './core/commands.js';
+import { IMPL } from './core/tools.js';
+import { pt } from './features/pathtrace.js';
 
 const $ = (s) => document.querySelector(s);
 
@@ -39,6 +43,7 @@ async function boot() {
   initVideo($('#viewport'), $('#timeline'));
   initTimelineUI();
   initAIPanel();
+  initFeatures();
   initLayout();
   await loadPlugins();
 
@@ -64,6 +69,8 @@ async function boot() {
     window.meshApp.mcp.reply({ rid, ok: r.ok, result: r.result, error: r.error });
   });
 
+  // API de script no console do DevTools: Mesh.run('geonodes'), await Mesh.tools.add_primitive({ type: 'cube' })
+  window.Mesh = { run: runCommand, tools: IMPL, state, navigate, debug: { pt } };
   requestAnimationFrame(() => $('#boot').classList.add('out'));
 }
 

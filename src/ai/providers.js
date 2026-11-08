@@ -10,6 +10,8 @@ export const PROVIDERS = [
   { id: 'acct-gemini', name: 'Gemini (sua conta Google)', format: 'account', cli: 'gemini', account: true, keyOptional: true, local: false, model: '' },
   { id: 'acct-claude', name: 'Claude (sua conta Pro/Max)', format: 'account', cli: 'claude', account: true, keyOptional: true, local: false, model: '' },
   { id: 'acct-chatgpt', name: 'ChatGPT (sua conta Plus/Pro)', format: 'account', cli: 'codex', account: true, keyOptional: true, local: false, model: '' },
+  { id: 'acct-qwen', name: 'Qwen (sua conta Qwen, grátis)', format: 'account', cli: 'qwen', account: true, keyOptional: true, local: false, model: '' },
+  { id: 'acct-copilot', name: 'GitHub Copilot (sua assinatura)', format: 'account', cli: 'copilot', account: true, keyOptional: true, local: false, model: '' },
   // ---- Nuvem: grandes laboratórios ----
   P('anthropic', 'Anthropic', 'https://api.anthropic.com/v1', 'claude-sonnet-5-5', { format: 'anthropic' }),
   P('openai', 'OpenAI', 'https://api.openai.com/v1', 'gpt-4.1'),
@@ -88,5 +90,30 @@ export const PROVIDERS = [
   // ---- Offline: demonstração sem modelo ----
   { id: 'demo', name: 'Demo (offline, sem IA)', format: 'demo', local: true, keyOptional: true, baseURL: '', model: 'demo' },
 ];
+
+// Página oficial onde o usuário entra NA PRÓPRIA CONTA e cria a chave. O Mesh abre essa página numa
+// janela com sessão persistente; ao fechar, detecta a chave copiada. Login "de verdade" (OAuth) onde existe.
+export const KEY_PAGES = {
+  anthropic: 'https://console.anthropic.com/settings/keys', openai: 'https://platform.openai.com/api-keys', gemini: 'https://aistudio.google.com/apikey',
+  xai: 'https://console.x.ai', mistral: 'https://console.mistral.ai/api-keys', deepseek: 'https://platform.deepseek.com/api_keys',
+  cohere: 'https://dashboard.cohere.com/api-keys', ai21: 'https://studio.ai21.com/account/api-key', perplexity: 'https://www.perplexity.ai/account/api/keys',
+  reka: 'https://platform.reka.ai/apikeys', upstage: 'https://console.upstage.ai/api-keys', writer: 'https://app.writer.com/aistudio',
+  groq: 'https://console.groq.com/keys', cerebras: 'https://cloud.cerebras.ai/platform', sambanova: 'https://cloud.sambanova.ai/apis',
+  together: 'https://api.together.ai/settings/api-keys', fireworks: 'https://fireworks.ai/account/api-keys', deepinfra: 'https://deepinfra.com/dash/api_keys',
+  hyperbolic: 'https://app.hyperbolic.xyz/settings', novita: 'https://novita.ai/settings/key-management', nebius: 'https://studio.nebius.com/settings/api-keys',
+  lambda: 'https://cloud.lambda.ai/api-keys', nvidia: 'https://build.nvidia.com/settings/api-keys', huggingface: 'https://huggingface.co/settings/tokens',
+  github: 'https://github.com/settings/personal-access-tokens', featherless: 'https://featherless.ai/account/api-keys', chutes: 'https://chutes.ai/app/api',
+  friendli: 'https://friendli.ai/suite/setting/tokens', kluster: 'https://platform.kluster.ai/apikeys', parasail: 'https://www.saas.parasail.io/keys',
+  inferencenet: 'https://inference.net/dashboard/api-keys', scaleway: 'https://console.scaleway.com/iam/api-keys', ovh: 'https://endpoints.ai.cloud.ovh.net',
+  venice: 'https://venice.ai/settings/api', siliconflow: 'https://cloud.siliconflow.cn/account/ak', moonshot: 'https://platform.moonshot.ai/console/api-keys',
+  zhipu: 'https://open.bigmodel.cn/usercenter/apikeys', qwen: 'https://bailian.console.alibabacloud.com/?apiKey=1', minimax: 'https://www.minimax.io/platform/user-center/basic-information/interface-key',
+  stepfun: 'https://platform.stepfun.com/interface-key', baichuan: 'https://platform.baichuan-ai.com/console/apikey', yi: 'https://platform.lingyiwanwu.com/apikeys',
+  volcengine: 'https://console.volcengine.com/ark/region:ark+cn-beijing/apiKey', qianfan: 'https://console.bce.baidu.com/iam/#/iam/apikey/list', hunyuan: 'https://console.cloud.tencent.com/hunyuan/api-key',
+  openrouter: 'https://openrouter.ai/settings/keys', vercel: 'https://vercel.com/dashboard/ai-gateway', requesty: 'https://app.requesty.ai/api-keys',
+  portkey: 'https://app.portkey.ai/api-keys', azure: 'https://portal.azure.com/#view/Microsoft_Azure_ProjectOxford/CognitiveServicesHub/~/OpenAI', cloudflare: 'https://dash.cloudflare.com/profile/api-tokens',
+};
+// Como cada provedor faz login: 'cli' (assinatura via ferramenta oficial), 'oauth' (login no navegador que devolve a chave),
+// 'ghcli' (reaproveita o login do GitHub CLI), 'console' (entra na conta e cria a chave), 'local' (detecta o servidor no PC).
+export const authOf = (p) => (p.format === 'account' ? 'cli' : p.id === 'openrouter' ? 'oauth' : p.id === 'github' ? 'ghcli' : p.local ? 'local' : 'console');
 
 export const getProvider = (id) => PROVIDERS.find((p) => p.id === id) || PROVIDERS[0];

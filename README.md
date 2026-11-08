@@ -51,12 +51,32 @@ offers **"Restart to update"**. You can also check manually in **Settings → Up
 - **Interface:** a floating canvas where panels move freely and can **pop out into another window or monitor**.
 - **Camera:** WASD fly camera (hold the right mouse button; Space goes up).
 
+### Blender-style features (new in 0.4)
+
+Modeled on [blender.org/features](https://www.blender.org/features/):
+
+| Area | What Mesh has |
+|---|---|
+| **Rendering** | **Cycles-style path tracing** on the GPU (viewport mode + final render with N samples, F11), render passes (depth, normals) and a **compositor**: color balance, vignette, chromatic aberration, film grain, lens distortion, sharpen, pixelate, depth of field and ambient occlusion. |
+| **Modeling / retopology** | New modifiers: **voxel remesh (all quads)**, decimate, shrinkwrap, smooth, cast, bend, taper, triangulate, weld. **Curves** (Bézier, path, circle, spiral, helix) with bevel and point editing. |
+| **Geometry Nodes** | Visual node editor: distribute points, instance on points, noise, subdivide, array, mirror, join… plus presets (rocks, grass, cube grid, organic). |
+| **Sculpting** | New brushes: draw, crease, pinch, clay, layer, snake hook. |
+| **Heat maps ("pontos de calor")** | Mesh analysis overlays: curvature, thickness, 3D-print overhang, sharp edges, UV distortion, distance to cursor, vertex density and bone weights — plus **Weight Paint** and **heat-diffusion automatic weights**. |
+| **Animation & rigging** | Constraints (track to, copy location/rotation, follow path, limit distance, floor), **IK** (CCD), **shape keys**. |
+| **Story artist** | **Grease Pencil-style drawing** in 3D with keyframes and onion skin (new *Draw* workspace). |
+| **Simulation** | Particle **liquid**, volumetric **smoke and fire**, **soft body**, **hair/fur** and an animated **ocean**. |
+| **VFX** | **Motion tracking** (markers, stabilization, object follows marker, tripod camera solve) and masks. |
+| **Pipeline** | Export glTF, OBJ, STL, **PLY, USDZ**; import glTF, OBJ, FBX, STL, **PLY, 3MF, Collada, USD/USDZ, VRML, 3DS, AMF**. |
+| **Scripting** | **Python console** (Pyodide) with a `mesh` module that exposes every tool; `window.Mesh` in DevTools. |
+
+All of them are also available to the AI assistant and to MCP clients.
+
 <a id="ia"></a>
 ## AI
 
 | Mode | How it works |
 |---|---|
-| **Your account (no API)** | Settings → **Accounts**. Uses the official **Gemini CLI** (Google account: free, Pro or Ultra) and **Claude Code** (Claude Pro/Max) tools, which log in with your subscription. The agent receives **only** Mesh's tools: no terminal, no files, no web. |
+| **Your account (no API)** | Settings → **Accounts**, for **every provider**: subscriptions through the official tools (**Gemini CLI**, **Claude Code**, **Codex/ChatGPT**, **Qwen Code**, **GitHub Copilot CLI**) that log in with your plan; **browser login** for OpenRouter (OAuth) and GitHub Models (your `gh` login); and for every other cloud provider an in-app window on the official key page where you sign in to your account — Mesh picks up the key you copy. Local servers are auto-detected. CLI agents receive **only** Mesh's tools. |
 | **API key** | 51 cloud providers (Anthropic, OpenAI, Gemini, Mistral, DeepSeek, Groq, OpenRouter…). Keys are encrypted on your PC. |
 | **Local models** | 19 local servers (Ollama, LM Studio, llama.cpp, vLLM…). No key and no internet needed. |
 | **MCP** | Any MCP client (Claude Desktop, Claude Code, Cursor…) can control Mesh. See Settings → MCP. |
@@ -82,6 +102,8 @@ Tests for the modeling geometry:
 ```bash
 node tests/editmesh.test.mjs
 node tests/modstack.test.mjs
+node tests/retopo.test.mjs     # remesh, decimate, shrinkwrap…
+node tests/geonodes.test.mjs   # geometry nodes
 ```
 
 ### Publishing a new version (maintainers)
@@ -95,6 +117,7 @@ node tests/modstack.test.mjs
 electron/      window, AI proxy, MCP bridge, account agents, updater
 mcp/           MCP server + toolspec (single source of tool definitions)
 src/core/      viewport, EditMesh, modifiers, precision, sculpting, UV, rigging, physics
+src/features/  path tracing, geometry nodes, heat maps, curves, grease pencil, sims, tracking, compositor, Python
 src/ui/        floating canvas, panels, pages, AI cursors
 src/store/     store + thumbnail generator     src/code/  Code Lab
 integrations/  scripts for Blender, Unreal, Unity, Godot, Roblox
@@ -104,4 +127,4 @@ tests/         modeling geometry tests
 ## License
 
 [MIT](LICENSE). Use, modify and distribute freely.
-Credits: Poly Haven assets (CC0) · icons by [Lucide](https://lucide.dev) (ISC) · brand logos by [Simple Icons](https://simpleicons.org) (CC0) · Helvetiker font (license in `src/assets/FONT_LICENSE`).
+Credits: Poly Haven assets (CC0) · icons by [Lucide](https://lucide.dev) (ISC) · AI brand logos by [LobeHub Icons](https://github.com/lobehub/lobe-icons) (MIT) and [Simple Icons](https://simpleicons.org) (CC0) · path tracing by [three-gpu-pathtracer](https://github.com/gkjohnson/three-gpu-pathtracer) (MIT) · Python by [Pyodide](https://pyodide.org) (MPL-2.0) · Helvetiker font (license in `src/assets/FONT_LICENSE`).
