@@ -59,4 +59,4 @@ server.setRequestHandler(CallToolRequestSchema, async (req) => {
   }
 });
 
-await server.connect(new StdioServerTransport());
+server.connect(new StdioServerTransport()).catch((e) => { console.error(e); process.exit(1); });

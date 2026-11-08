@@ -1,9 +1,12 @@
 {
   "name": "mesh-studio",
   "productName": "Mesh",
-  "version": "0.1.0",
-  "description": "Mesh — modelagem 3D, animação, VFX/SFX e edição de vídeo com IA (MCP + 50 provedores + modelos locais).",
-  "author": "Mesh",
+  "version": "0.3.0",
+  "description": "Mesh — 3D modeling, sculpting, animation, VFX/SFX and video editing with AI (MCP, 70+ providers, local models, or your own Gemini/Claude account).",
+  "author": {
+    "name": "CodeState01",
+    "url": "https://github.com/CodeState01"
+  },
   "license": "MIT",
   "type": "module",
   "main": "electron/main.cjs",
@@ -12,9 +15,10 @@
     "web": "vite",
     "build": "vite build",
     "start": "vite build && electron .",
-    "dist": "vite build && electron-builder --win --publish never",
-    "release": "vite build && electron-builder --win --publish always",
-    "mcp": "node mcp/server.mjs"
+    "dist": "vite build && node scripts/build-mcp.mjs && electron-builder --win --publish never",
+    "release": "vite build && node scripts/build-mcp.mjs && electron-builder --win --publish always",
+    "mcp": "node mcp/server.mjs",
+    "build:mcp": "node scripts/build-mcp.mjs"
   },
   "dependencies": {
     "@codemirror/lang-javascript": "^6.2.5",
@@ -42,6 +46,7 @@
   "build": {
     "appId": "studio.mesh.app",
     "productName": "Mesh",
+    "copyright": "Copyright © 2026 CodeState01 — MIT",
     "directories": {
       "output": "release",
       "buildResources": "build"
@@ -49,31 +54,57 @@
     "files": [
       "dist/**",
       "electron/**",
-      "mcp/**",
       "package.json"
     ],
     "extraResources": [
       {
-        "from": "mcp",
+        "from": "mcp-dist",
         "to": "mcp"
       }
     ],
+    "asar": true,
     "win": {
       "target": [
-        "nsis"
+        {
+          "target": "nsis",
+          "arch": [
+            "x64"
+          ]
+        },
+        {
+          "target": "portable",
+          "arch": [
+            "x64"
+          ]
+        }
       ],
       "icon": "build/icon.png"
     },
     "nsis": {
       "oneClick": false,
-      "allowToChangeInstallationDirectory": true
+      "perMachine": false,
+      "allowToChangeInstallationDirectory": true,
+      "createDesktopShortcut": true,
+      "createStartMenuShortcut": true,
+      "shortcutName": "Mesh",
+      "artifactName": "Mesh-Setup-${version}.exe",
+      "deleteAppDataOnUninstall": false
+    },
+    "portable": {
+      "artifactName": "Mesh-${version}-portable.exe"
     },
     "publish": [
       {
         "provider": "github",
         "owner": "CodeState01",
-        "repo": "argila-studio"
+        "repo": "mesh-studio",
+        "releaseType": "release"
       }
     ]
+  },
+  "homepage": "https://github.com/CodeState01/mesh-studio",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/CodeState01/mesh-studio.git"
   }
 }

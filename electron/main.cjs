@@ -9,6 +9,8 @@ const fs = require('node:fs');
 const { startBridge } = require('./bridge.cjs');
 const { setupUpdater } = require('./updater.cjs');
 const agents = require('./agents.cjs');
+// Instalado: servidor MCP empacotado (1 arquivo, fora do app.asar). Em desenvolvimento: o código-fonte.
+const MCP_SERVER = () => (app.isPackaged ? path.join(process.resourcesPath, 'mcp', 'server.cjs') : path.join(__dirname, '..', 'mcp', 'server.mjs'));
 
 const isDev = !!process.env.MESH_DEV;
 // No modo de teste a janela pode estar "oculta" (sessão bloqueada/RDP): sem isso o
@@ -134,7 +136,7 @@ ipcMain.handle('shell:openPath', (_e, p) => {
 ipcMain.handle('app:info', () => ({
   version: app.getVersion(),
   mcpPort: bridge?.port,
-  mcpServerPath: path.join(app.isPackaged ? process.resourcesPath : path.join(__dirname, '..'), 'mcp', 'server.mjs'),
+  mcpServerPath: MCP_SERVER(),
 }));
 
 let bridge;
@@ -143,7 +145,8 @@ app.whenReady().then(() => {
   // Ponte MCP: o servidor MCP (stdio) conecta aqui e as chamadas de ferramenta
   // são repassadas ao renderer, que executa na cena e devolve o resultado.
   bridge = startBridge({ getWindow: () => win, ipcMain });
-  setupUpdater({ getWindow: () => win, ipcMain, enabled: app.isPackaged });
+  // A versão portátil não se atualiza sozinha (só o instalador); ela avisa via link de download.
+  setupUpdater({ getWindow: () => win, ipcMain, enabled: app.isPackaged && !process.env.PORTABLE_EXECUTABLE_DIR });
 });
 
 app.on('window-all-closed', () => { if (process.platform !== 'darwin') app.quit(); });
@@ -154,7 +157,7 @@ ipcMain.handle('agents:status', () => agents.status());
 ipcMain.handle('agents:login', (_e, id) => agents.openLogin(id));
 ipcMain.handle('agents:run', (e, { id, prompt, model }) => agents.run({
   id, prompt, model,
-  serverPath: path.join(app.getAppPath(), 'mcp', 'server.mjs'),
+  serverPath: MCP_SERVER(),
   workDir: path.join(app.getPath('userData'), 'agent-workspace'),
   onEvent: (ev) => { if (!e.sender.isDestroyed()) e.sender.send('agents:event', ev); },
 }));
