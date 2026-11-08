@@ -1,4 +1,4 @@
-/* Argila Studio — "canvas flutuante"
+/* Mesh — "canvas flutuante"
    O viewport ocupa a tela; painéis de vidro escuro flutuam por cima com cantos generosos.
    Uma cor de destaque (terracota). Ícones em todo botão. Motion curto com leve mola. */
 :root {
@@ -6,7 +6,7 @@
   --bg1: #16171a; --bg2: #1e1f23; --bg3: #27282d; --bg4: #323339;
   --line: rgba(255,255,255,.07); --line2: rgba(255,255,255,.12);
   --text: #ecebe8; --text2: #b3b1ac; --mute: #7a797d;
-  --accent: #e2703f; --accent-ink: #1c0c05; --accent-soft: #e2703f26;
+  --accent: #b9f23c; --accent-ink: #10160a; --accent-soft: #b9f23c26;
   --x: #e5534b; --y: #7bb33a; --z: #4a8ff0; --ok: #5bd17a;
   --r: 9px; --r2: 13px; --r3: 18px;
   --shadow: 0 10px 40px rgba(0,0,0,.45), 0 0 0 1px var(--line);
@@ -15,7 +15,7 @@
   --display: "Segoe UI Variable Display", "Segoe UI", system-ui, sans-serif;
   --mono: "Cascadia Mono", "JetBrains Mono", ui-monospace, Consolas, monospace;
   --cur: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='24' height='24' viewBox='0 0 24 24'%3E%3Cpath d='M5 3.2v15.4l4.1-3.9 2.8 6.2 2.9-1.3-2.8-6.1h5.8z' fill='%23111214' stroke='%23ffffff' stroke-width='1.5' stroke-linejoin='round'/%3E%3C/svg%3E") 5 3, default;
-  --cur-hand: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='24' height='24' viewBox='0 0 24 24'%3E%3Cpath d='M5 3.2v15.4l4.1-3.9 2.8 6.2 2.9-1.3-2.8-6.1h5.8z' fill='%23e2703f' stroke='%23ffffff' stroke-width='1.5' stroke-linejoin='round'/%3E%3C/svg%3E") 5 3, pointer;
+  --cur-hand: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='24' height='24' viewBox='0 0 24 24'%3E%3Cpath d='M5 3.2v15.4l4.1-3.9 2.8 6.2 2.9-1.3-2.8-6.1h5.8z' fill='%23b9f23c' stroke='%23ffffff' stroke-width='1.5' stroke-linejoin='round'/%3E%3C/svg%3E") 5 3, pointer;
   --cur-move: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='24' height='24' viewBox='0 0 24 24'%3E%3Ccircle cx='12' cy='12' r='4' fill='%23111214' stroke='%23fff' stroke-width='1.5'/%3E%3C/svg%3E") 12 12, crosshair;
   --gap: 12px; --top: 52px;
 }
@@ -37,8 +37,8 @@ kbd { font: 10.5px var(--mono); padding: 1px 5px; border: 1px solid var(--line2)
 /* ---------- Boot ---------- */
 #boot { position: fixed; inset: 0; z-index: 100; display: grid; place-items: center; background: var(--bg0); transition: opacity .5s var(--ease-out), visibility .5s; }
 #boot.out { opacity: 0; visibility: hidden; }
-.boot-mark { width: 48px; height: 46px; border-radius: 52% 48% 50% 46% / 50% 54% 46% 50%; background: var(--accent); animation: knead 1.1s var(--ease-out) infinite alternate; }
-@keyframes knead { from { border-radius: 52% 48% 50% 46% / 50% 54% 46% 50%; transform: scale(.94); } to { border-radius: 46% 54% 44% 56% / 56% 46% 54% 44%; transform: scale(1); } }
+.boot-mark { width: 64px; height: 64px; animation: breathe 1s var(--ease-out) infinite alternate; }
+@keyframes breathe { from { transform: scale(.92); opacity: .7; } to { transform: scale(1); opacity: 1; } }
 
 /* ---------- Base dos flutuantes ---------- */
 #app { position: fixed; inset: 0; }
@@ -151,7 +151,7 @@ input[type=range]:active::-webkit-slider-thumb { transform: scale(1.25); backgro
 .grid-btns { display: grid; grid-template-columns: repeat(3, 1fr); gap: 5px; }
 .grid-btns.two { grid-template-columns: repeat(2, 1fr); } .grid-btns.four { grid-template-columns: repeat(4, 1fr); }
 .chip { padding: 8px 4px 7px; border: 1px solid var(--line); background: rgba(0,0,0,.2); border-radius: 10px; color: var(--text2); font-size: 11.5px; display: flex; flex-direction: column; align-items: center; gap: 5px; transition: border-color .15s, color .15s, transform .2s var(--ease), background .15s; }
-.chip:hover { border-color: var(--accent); color: var(--text); background: rgba(226,112,63,.06); }
+.chip:hover { border-color: var(--accent); color: var(--text); background: rgba(185,242,60,.06); }
 .chip:active { transform: scale(.96); }
 .chip.on { border-color: var(--accent); color: var(--accent); }
 .chip .i { color: inherit; }
@@ -281,7 +281,7 @@ body.ai-open #bottom { right: calc(var(--gap) * 2 + 340px + 312px + 10px); }
 .msg { max-width: 92%; padding: 9px 12px; border-radius: 13px; line-height: 1.5; white-space: pre-wrap; animation: fadeUp .25s var(--ease-out); }
 .msg.user { align-self: flex-end; background: var(--bg4); border-bottom-right-radius: 4px; }
 .msg.assistant { align-self: flex-start; padding-left: 0; }
-.msg.error { color: #ff9f8a; border: 1px solid #e2703f55; background: #e2703f12; }
+.msg.error { color: #ff9f8a; border: 1px solid #b9f23c55; background: #b9f23c12; }
 .toolrun { display: flex; flex-wrap: wrap; gap: 4px; animation: fadeUp .25s var(--ease-out); }
 .toolrun span { font-size: 11px; padding: 3px 9px; border-radius: 20px; background: rgba(0,0,0,.25); border: 1px solid var(--line2); color: var(--text2); display: inline-flex; gap: 6px; align-items: center; }
 .toolrun span i { width: 6px; height: 6px; border-radius: 50%; background: var(--c, var(--accent)); }
@@ -321,7 +321,7 @@ body.ai-open #bottom { right: calc(var(--gap) * 2 + 340px + 312px + 10px); }
 .modal-hud.on { opacity: 1; transform: translate(-50%, 0); }
 .modal-hud span { color: var(--text2); } .modal-hud em { font: 11px var(--font); font-style: normal; color: var(--mute); margin-left: 8px; }
 .modal-hud kbd { color: var(--accent); border-color: var(--accent); }
-.rect-select { position: fixed; z-index: 40; border: 1px solid var(--accent); background: rgba(226,112,63,.1); border-radius: 3px; pointer-events: none; }
+.rect-select { position: fixed; z-index: 40; border: 1px solid var(--accent); background: rgba(185,242,60,.1); border-radius: 3px; pointer-events: none; }
 .measure-labels { position: absolute; inset: 0; pointer-events: none; z-index: 5; }
 .measure-labels span { position: absolute; transform: translate(-50%, -130%); padding: 3px 8px; border-radius: 7px; background: #ffd23d; color: #1a1400; font: 600 11.5px var(--mono); white-space: nowrap; display: flex; flex-direction: column; align-items: center; }
 .measure-labels small { font-weight: 400; font-size: 9.5px; opacity: .75; }
@@ -345,7 +345,7 @@ h3 { font: 600 13px var(--display); margin: 18px 0 8px; display: flex; align-ite
 .search:focus-within { border-color: var(--accent); }
 .search input { flex: 1; background: none; border: 0; outline: none; color: var(--text); font: inherit; }
 .search.wide { width: 100%; margin: 12px 0; }
-.hero { display: flex; align-items: center; gap: 18px; padding: 24px; border-radius: var(--r3); background: linear-gradient(120deg, rgba(226,112,63,.08), transparent 60%), var(--bg1); border: 1px solid var(--line); flex-wrap: wrap; }
+.hero { display: flex; align-items: center; gap: 18px; padding: 24px; border-radius: var(--r3); background: linear-gradient(120deg, rgba(185,242,60,.08), transparent 60%), var(--bg1); border: 1px solid var(--line); flex-wrap: wrap; }
 .hero h1 { font: 650 24px var(--display); letter-spacing: -.02em; } .hero p { color: var(--text2); }
 .hero-actions { margin-left: auto; display: flex; gap: 8px; flex-wrap: wrap; }
 .start-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; }
@@ -476,3 +476,32 @@ h3 { font: 600 13px var(--display); margin: 18px 0 8px; display: flex; align-ite
 #precision-bar { max-width: calc(100% - (var(--gap) + 236px + 64px) - (312px + var(--gap) + 10px)); overflow-x: auto; scrollbar-width: none; }
 body.ai-open #precision-bar { max-width: calc(100% - (var(--gap) + 236px + 64px) - (312px + 340px + var(--gap) * 2 + 10px)); }
 #precision-bar::-webkit-scrollbar { display: none; }
+
+/* Pilha de modificadores */
+.mod-card { border: 1px solid var(--line2); border-radius: 12px; padding: 6px 8px 4px; margin-bottom: 6px; background: rgba(0,0,0,.18); animation: fadeUp .25s var(--ease-out); transition: opacity .2s; }
+.mod-card.off { opacity: .5; }
+.mod-h { display: flex; align-items: center; gap: 6px; margin-bottom: 6px; } .mod-h b { font-weight: 600; font-size: 12.5px; } .mod-h > .i { color: var(--accent); }
+.mod-h .icon-btn { width: 26px; height: 26px; }
+
+/* HUD da câmera de voo */
+.fly-hud { position: absolute; left: 50%; bottom: 96px; transform: translate(-50%, 8px); z-index: 25; display: flex; align-items: center; gap: 14px; padding: 9px 16px; border-radius: 14px; background: #000c; box-shadow: 0 0 0 1px var(--line2); font-size: 12px; color: var(--text2); opacity: 0; pointer-events: none; transition: opacity .2s, transform .3s var(--ease); white-space: nowrap; }
+.fly-hud.on { opacity: 1; transform: translate(-50%, 0); }
+.fly-hud > b { color: var(--accent); } .fly-hud kbd { margin-right: 2px; }
+
+/* Painéis móveis: barrinha de arrastar + destacar em outra janela */
+.grip { position: absolute; top: 0; left: 50%; transform: translateX(-50%); height: 12px; padding: 0 18px; display: flex; align-items: center; gap: 6px; cursor: grab; z-index: 5; opacity: 0; transition: opacity .2s; }
+.float:hover > .grip, .dragging > .grip { opacity: 1; }
+.grip > i { width: 34px; height: 4px; border-radius: 4px; background: var(--bg4); transition: background .15s; }
+.grip:hover > i { background: var(--accent); }
+.grip-pop { width: 16px; height: 12px; display: grid; place-items: center; color: var(--mute); border-radius: 4px; }
+.grip-pop:hover { color: var(--accent); }
+.float.dragging { box-shadow: 0 20px 60px rgba(0,0,0,.6), 0 0 0 1px var(--accent); transition: none; z-index: 50; }
+.float.will-pop { opacity: .55; outline: 2px dashed var(--accent); outline-offset: 4px; }
+body.dragging-panel, body.dragging-panel * { cursor: grabbing !important; user-select: none; }
+/* Janela destacada: o painel ocupa a janela inteira */
+body.popout { background: var(--bg1); overflow: hidden; }
+.popped { position: fixed !important; inset: 0 !important; width: auto !important; height: auto !important; max-width: none !important; max-height: none !important; transform: none !important; border-radius: 0 !important; box-shadow: none !important; }
+.popped > .grip { display: none; }
+/* com a barrinha de arrastar dentro, ":empty" não funciona mais — escondemos quando não há conteúdo real */
+#op-panel:not(:has(h4)) { display: none; }
+#tool-dock:not(:has(.dock-btn)) { display: none; }

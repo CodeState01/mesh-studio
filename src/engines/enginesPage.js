@@ -8,11 +8,11 @@ import { icon } from '../ui/icons.js';
 import { toast } from '../ui/toast.js';
 
 export const ENGINES = [
-  { id: 'unity', name: 'Unity', fmt: 'glb', color: '#9aa3ad', hint: 'Escolha uma pasta dentro de Assets/ (ex.: Assets/Argila). Instale o pacote glTFast (com.unity.cloud.gltfast) para importar .glb — o Unity reimporta sozinho a cada envio.', script: 'integrations/unity/ArgilaLiveLink.cs' },
-  { id: 'unreal', name: 'Unreal Engine', fmt: 'glb', color: '#c9ccd3', hint: 'Escolha uma pasta fora de Content/ (ex.: Projeto/ArgilaInbox). O script Python incluso importa os .glb para /Game/Argila (ative o plugin "Python Editor Script").', script: 'integrations/unreal/argila_import.py' },
-  { id: 'godot', name: 'Godot', fmt: 'glb', color: '#6fa8dc', hint: 'Escolha uma pasta dentro do projeto (ex.: res://argila). O Godot importa .glb nativamente e atualiza ao detectar mudanças.', script: 'integrations/godot/README.md' },
+  { id: 'unity', name: 'Unity', fmt: 'glb', color: '#9aa3ad', hint: 'Escolha uma pasta dentro de Assets/ (ex.: Assets/Mesh). Instale o pacote glTFast (com.unity.cloud.gltfast) para importar .glb — o Unity reimporta sozinho a cada envio.', script: 'integrations/unity/MeshLiveLink.cs' },
+  { id: 'unreal', name: 'Unreal Engine', fmt: 'glb', color: '#c9ccd3', hint: 'Escolha uma pasta fora de Content/ (ex.: Projeto/MeshInbox). O script Python incluso importa os .glb para /Game/Mesh (ative o plugin "Python Editor Script").', script: 'integrations/unreal/mesh_import.py' },
+  { id: 'godot', name: 'Godot', fmt: 'glb', color: '#6fa8dc', hint: 'Escolha uma pasta dentro do projeto (ex.: res://mesh). O Godot importa .glb nativamente e atualiza ao detectar mudanças.', script: 'integrations/godot/README.md' },
   { id: 'roblox', name: 'Roblox Studio', fmt: 'obj', color: '#e5534b', hint: 'Exporta OBJ/GLB para uma pasta. No Studio use Avatar/Home › Import 3D e selecione o arquivo. Dica: o servidor MCP do Roblox Studio também pode ser usado em conjunto.', script: 'integrations/roblox/README.md' },
-  { id: 'blender', name: 'Blender', fmt: 'glb', color: '#e2703f', hint: 'Instale o add-on incluso (Edit › Preferences › Add-ons › Install) e aponte para esta pasta: o Blender recarrega a cena sozinho a cada envio.', script: 'integrations/blender/argila_live_link.py' },
+  { id: 'blender', name: 'Blender', fmt: 'glb', color: '#b9f23c', hint: 'Instale o add-on incluso (Edit › Preferences › Add-ons › Install) e aponte para esta pasta: o Blender recarrega a cena sozinho a cada envio.', script: 'integrations/blender/mesh_live_link.py' },
   { id: 'web', name: 'Web / Three.js', fmt: 'glb', color: '#7bd389', hint: 'Exporta .glb pronto para Three.js, Babylon.js, PlayCanvas, A-Frame ou <model-viewer>.', script: null },
 ];
 const FORMATS = ['glb', 'gltf', 'obj', 'stl'];
@@ -22,9 +22,9 @@ export async function sendTo(id, onlySelection = false) {
   const e = ENGINES.find((x) => x.id === id); const c = cfg(id);
   const objs = onlySelection && state.selected ? [state.selected] : content.children;
   const { data, binary } = await exportData(c.fmt, objs);
-  const name = `${onlySelection && state.selected ? state.selected.name.replace(/[^\w.-]+/g, '_') : 'argila_cena'}.${c.fmt}`;
-  if (window.argila?.file?.writeTo && c.dir) {
-    const path = await window.argila.file.writeTo({ dir: c.dir, name, data, binary });
+  const name = `${onlySelection && state.selected ? state.selected.name.replace(/[^\w.-]+/g, '_') : 'mesh_cena'}.${c.fmt}`;
+  if (window.meshApp?.file?.writeTo && c.dir) {
+    const path = await window.meshApp.file.writeTo({ dir: c.dir, name, data, binary });
     c.last = new Date().toLocaleTimeString(); saveSettings();
     return path;
   }
@@ -62,12 +62,12 @@ export function renderEngines(el) {
     const id = card.dataset.e; const c = cfg(id);
     try {
       if (a === 'dir') {
-        if (!window.argila?.file?.pickDir) { toast('Disponível no app desktop'); return; }
-        const d = await window.argila.file.pickDir({ title: 'Pasta do projeto — ' + ENGINES.find((x) => x.id === id).name }); if (!d) return;
+        if (!window.meshApp?.file?.pickDir) { toast('Disponível no app desktop'); return; }
+        const d = await window.meshApp.file.pickDir({ title: 'Pasta do projeto — ' + ENGINES.find((x) => x.id === id).name }); if (!d) return;
         c.dir = d; saveSettings(); renderEngines(el);
       }
       if (a === 'all' || a === 'sel') { const p = await sendTo(id, a === 'sel'); toast('Enviado: ' + p.split(/[\\/]/).pop()); renderEngines(el); }
-      if (a === 'open') window.argila?.file?.openPath(c.dir);
+      if (a === 'open') window.meshApp?.file?.openPath(c.dir);
     } catch (err) { toast(err.message, { kind: 'error' }); }
   };
   el.querySelector('.engine-grid').onchange = (ev) => {

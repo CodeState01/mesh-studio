@@ -1,4 +1,4 @@
-// Importação/exportação de modelos e salvamento de projeto (.argila).
+// Importação/exportação de modelos e salvamento de projeto (.mesh; também abre .argila e .orbe).
 // O formato de projeto é versionado; MIGRATIONS converte arquivos antigos
 // quando o app for atualizado — base para "atualizações futuras" sem quebrar projetos.
 import * as THREE from 'three';
@@ -15,6 +15,7 @@ import { applyEnvironment } from '../core/viewport.js';
 import { serializeAnim, loadAnim } from '../anim/timeline.js';
 import { serializeVideo, loadVideo } from '../video/editor.js';
 import { rehydrateVFX } from '../fx/vfx.js';
+import { rehydrateModifiers } from '../core/modruntime.js';
 
 export const PROJECT_VERSION = 1;
 const MIGRATIONS = {
@@ -22,13 +23,13 @@ const MIGRATIONS = {
 };
 
 async function save(name, data, filters, binary = false) {
-  if (window.argila?.file) return window.argila.file.save({ name, data, filters, binary });
+  if (window.meshApp?.file) return window.meshApp.file.save({ name, data, filters, binary });
   const blob = new Blob([data]); const a = document.createElement('a');
   a.href = URL.createObjectURL(blob); a.download = name; a.click(); return name;
 }
 
 async function open(filters, accept) {
-  if (window.argila?.file) return window.argila.file.open({ filters });
+  if (window.meshApp?.file) return window.meshApp.file.open({ filters });
   return new Promise((res) => {
     const i = document.createElement('input'); i.type = 'file'; i.accept = accept;
     i.onchange = async () => { const f = i.files[0]; if (!f) return res(null); res({ name: f.name, data: new Uint8Array(await f.arrayBuffer()) }); };
@@ -38,7 +39,7 @@ async function open(filters, accept) {
 
 // Clone limpo para exportação: sem proxies/helpers de editor.
 function exportRoot(objects) {
-  const root = new THREE.Group(); root.name = 'Argila';
+  const root = new THREE.Group(); root.name = 'Mesh';
   (objects || content.children).forEach((o) => root.add(o.clone(true)));
   const drop = []; root.traverse((o) => { if (o.userData.proxy || o.userData.editHelper || o.isPoints || o.isLight || o.isCamera) drop.push(o); });
   drop.forEach((o) => o.parent?.remove(o));
@@ -87,17 +88,17 @@ export function serializeProject() {
   const drop = []; root.traverse((o) => { if (o.userData.editHelper) drop.push(o); }); drop.forEach((o) => o.parent.remove(o));
   root.traverse((o) => { delete o.userData.dispose; });
   return {
-    app: 'argila-studio', version: PROJECT_VERSION, savedAt: new Date().toISOString(),
+    app: 'mesh-studio', version: PROJECT_VERSION, savedAt: new Date().toISOString(),
     scene: root.toJSON(), env: state.env, anim: serializeAnim(), video: serializeVideo(),
   };
 }
 
 export async function saveProject() {
-  return save('projeto.argila', JSON.stringify(serializeProject()), [{ name: 'Projeto Argila', extensions: ['argila', 'orbe'] }]);
+  return save('projeto.mesh', JSON.stringify(serializeProject()), [{ name: 'Projeto Mesh', extensions: ['mesh', 'argila', 'orbe'] }]);
 }
 
 export async function openProject() {
-  const f = await open([{ name: 'Projeto Argila', extensions: ['argila', 'orbe'] }], '.argila,.orbe');
+  const f = await open([{ name: 'Projeto Mesh', extensions: ['mesh', 'argila', 'orbe'] }], '.mesh,.argila,.orbe');
   if (!f) return; loadProject(JSON.parse(new TextDecoder().decode(f.data)));
 }
 
@@ -105,12 +106,12 @@ export async function loadProject(p) {
   while ((p.version ?? 0) < PROJECT_VERSION) {
     const m = MIGRATIONS[p.version ?? 0]; if (!m) throw new Error(`Sem migração para v${p.version}`); p = m(p);
   }
-  if (p.version > PROJECT_VERSION) throw new Error('Projeto criado numa versão mais nova do Argila. Atualize o app.');
+  if (p.version > PROJECT_VERSION) throw new Error('Projeto criado numa versão mais nova do Mesh. Atualize o app.');
   const root = await new THREE.ObjectLoader().parseAsync(p.scene);
   select(null);
   [...content.children].forEach((c) => { c.userData.dispose?.(); content.remove(c); });
   [...root.children].forEach((c) => content.add(c));
-  rehydrateVFX();
+  rehydrateVFX(); rehydrateModifiers();
   applyEnvironment(p.env || {});
   loadAnim(p.anim); loadVideo(p.video);
   bus.emit('scene:changed');
@@ -118,9 +119,9 @@ export async function loadProject(p) {
 
 // Autosave local (recuperação de falhas)
 export function startAutosave() {
-  setInterval(() => { try { localStorage.setItem('argila:autosave', JSON.stringify(serializeProject())); } catch {} }, 60_000);
+  setInterval(() => { try { localStorage.setItem('mesh:autosave', JSON.stringify(serializeProject())); } catch {} }, 60_000);
 }
 export function restoreAutosave() {
-  const raw = localStorage.getItem('argila:autosave'); if (!raw) return false;
+  const raw = localStorage.getItem('mesh:autosave'); if (!raw) return false;
   loadProject(JSON.parse(raw)); return true;
 }

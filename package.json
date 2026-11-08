@@ -1,14 +1,14 @@
 {
-  "name": "argila-studio",
-  "productName": "Argila Studio",
+  "name": "mesh-studio",
+  "productName": "Mesh",
   "version": "0.1.0",
-  "description": "Argila Studio — modelagem 3D, animação, VFX/SFX e edição de vídeo com IA (MCP + 50 provedores + modelos locais).",
-  "author": "Argila",
+  "description": "Mesh — modelagem 3D, animação, VFX/SFX e edição de vídeo com IA (MCP + 50 provedores + modelos locais).",
+  "author": "Mesh",
   "license": "MIT",
   "type": "module",
   "main": "electron/main.cjs",
   "scripts": {
-    "dev": "concurrently -k \"vite\" \"wait-on tcp:5173 && cross-env ARGILA_DEV=1 electron .\"",
+    "dev": "concurrently -k \"vite\" \"wait-on tcp:5173 && cross-env MESH_DEV=1 electron .\"",
     "web": "vite",
     "build": "vite build",
     "start": "vite build && electron .",
@@ -40,8 +40,8 @@
     "wait-on": "^8.0.1"
   },
   "build": {
-    "appId": "studio.argila.app",
-    "productName": "Argila Studio",
+    "appId": "studio.mesh.app",
+    "productName": "Mesh",
     "directories": {
       "output": "release",
       "buildResources": "build"

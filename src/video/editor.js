@@ -132,8 +132,8 @@ export function exportVideo() {
   recorder.onstop = async () => {
     const blob = new Blob(chunks, { type: 'video/webm' });
     const buf = new Uint8Array(await blob.arrayBuffer());
-    if (window.argila?.file) await window.argila.file.save({ name: 'argila-video.webm', data: buf, binary: true, filters: [{ name: 'WebM', extensions: ['webm'] }] });
-    else { const a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = 'argila-video.webm'; a.click(); }
+    if (window.meshApp?.file) await window.meshApp.file.save({ name: 'mesh-video.webm', data: buf, binary: true, filters: [{ name: 'WebM', extensions: ['webm'] }] });
+    else { const a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = 'mesh-video.webm'; a.click(); }
     toast('Vídeo exportado');
   };
   recording = true; video.time = 0; recorder.start(); videoPlay(true);

@@ -1,13 +1,13 @@
-# Argila → Unreal Engine 5: importa os .glb da pasta "inbox" para /Game/Argila.
+# Mesh → Unreal Engine 5: importa os .glb da pasta "inbox" para /Game/Mesh.
 # Requer o plugin "Python Editor Script Plugin" (e "glTF Importer", ativo por padrão no UE5).
-# Uso: Output Log > Python:  py "C:/caminho/argila_import.py" "C:/MeuProjeto/ArgilaInbox"
+# Uso: Output Log > Python:  py "C:/caminho/mesh_import.py" "C:/MeuProjeto/MeshInbox"
 # Dica: adicione em Project Settings > Python > Startup Scripts para rodar sozinho.
 import os
 import sys
 import unreal
 
-INBOX = sys.argv[1] if len(sys.argv) > 1 else os.path.join(unreal.Paths.project_dir(), "ArgilaInbox")
-DEST = "/Game/Argila"
+INBOX = sys.argv[1] if len(sys.argv) > 1 else os.path.join(unreal.Paths.project_dir(), "MeshInbox")
+DEST = "/Game/Mesh"
 
 
 def import_all():
@@ -23,7 +23,7 @@ def import_all():
         t.save = True
         tasks.append(t)
     unreal.AssetToolsHelpers.get_asset_tools().import_asset_tasks(tasks)
-    unreal.log(f"[Argila] {len(tasks)} arquivo(s) importado(s) para {DEST}")
+    unreal.log(f"[Mesh] {len(tasks)} arquivo(s) importado(s) para {DEST}")
 
 
 import_all()

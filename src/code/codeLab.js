@@ -54,7 +54,7 @@ for (let i = 0; i < 24; i++) {
 const sol = sphere(0.5, '#ffb347'); sol.position.y = 1;
 sol.material.emissive.set('#ff8a00'); sol.material.emissiveIntensity = 1.2;
 const planetas = [0.9, 1.5, 2.2, 3].map((r, i) => {
-  const p = sphere(0.12 + i * 0.04, ['#9fd2ff', '#e2703f', '#7bd389', '#c9a0ff'][i]);
+  const p = sphere(0.12 + i * 0.04, ['#9fd2ff', '#b9f23c', '#7bd389', '#c9a0ff'][i]);
   return { p, r, v: 1.4 / (i + 1) };
 });
 onFrame((t) => planetas.forEach(({ p, r, v }) => p.position.set(Math.cos(t * v) * r, 1, Math.sin(t * v) * r)));`,
@@ -122,7 +122,7 @@ function run(code) {
     let tris = 0; group.traverse((o) => { if (o.geometry) tris += (o.geometry.index ? o.geometry.index.count : o.geometry.attributes.position.count) / 3; });
     log(`✓ executado em ${(performance.now() - t0).toFixed(1)} ms · ${group.children.length} objetos · ${Math.round(tris).toLocaleString()} triângulos`);
   } catch (e) { log('✗ ' + e.message, true); }
-  try { localStorage.setItem('argila:code', code); } catch {}
+  try { localStorage.setItem('mesh:code', code); } catch {}
 }
 
 function sendToScene() {
@@ -136,7 +136,7 @@ function sendToScene() {
 }
 
 export function renderCodeLab(el) {
-  let saved = ''; try { saved = localStorage.getItem('argila:code') || ''; } catch {}
+  let saved = ''; try { saved = localStorage.getItem('mesh:code') || ''; } catch {}
   el.innerHTML = `<div class="code-lab">
     <div class="code-bar">
       <select class="field" id="cl-tpl" style="width:200px"><option value="">Modelos de código…</option>${Object.keys(TEMPLATES).map((k) => `<option>${k}</option>`).join('')}</select>

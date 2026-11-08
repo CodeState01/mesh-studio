@@ -41,7 +41,7 @@ export function renderGraph(el) {
     g.font = '10px Cascadia Mono, monospace'; g.fillStyle = '#77767a'; g.strokeStyle = '#24252a'; g.lineWidth = 1;
     for (let i = 0; i <= 4; i++) { const v = lo + ((hi - lo) * i) / 4; const y = Y(v); g.beginPath(); g.moveTo(L, y); g.lineTo(W - R, y); g.stroke(); g.fillText(v.toFixed(2), 4, y + 3); }
     for (let s = 0; s <= state.duration; s++) { const x = X(s); g.beginPath(); g.moveTo(x, T); g.lineTo(x, H - B); g.stroke(); g.fillText(s + 's', x - 6, H - 6); }
-    g.strokeStyle = '#e2703f'; g.beginPath(); g.moveTo(X(state.time), T); g.lineTo(X(state.time), H - B); g.stroke();
+    g.strokeStyle = '#b9f23c'; g.beginPath(); g.moveTo(X(state.time), T); g.lineTo(X(state.time), H - B); g.stroke();
     for (const c of visible) {
       g.strokeStyle = CH[c][3]; g.lineWidth = 1.6; g.beginPath();
       for (let px = 0; px <= W - L - R; px += 2) { const t = (px / (W - L - R)) * state.duration; const y = Y(sample(keys, c, t)); px ? g.lineTo(L + px, y) : g.moveTo(L, y); }

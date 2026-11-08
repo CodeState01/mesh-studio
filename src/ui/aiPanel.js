@@ -12,7 +12,7 @@ import { toast } from './toast.js';
 
 const $ = (s, r = document) => r.querySelector(s);
 const esc = (s) => String(s ?? '').replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
-const COLORS = ['#e2703f', '#3dd6ff', '#b4ff3d', '#ff3dbe', '#ffd23d', '#8f7bff', '#3dffa8', '#ff9f3d'];
+const COLORS = ['#b9f23c', '#3dd6ff', '#b4ff3d', '#ff3dbe', '#ffd23d', '#8f7bff', '#3dffa8', '#ff9f3d'];
 export const openSettings = (section) => bus.emit('navigate', { page: 'settings', section });
 
 const cfg = () => ({
@@ -47,6 +47,7 @@ export function initAIPanel() {
   setBusy(false);
 
   bus.on('ai:message', ({ role, content }) => addMsg(role, content));
+  bus.on('ai:message:update', (m) => { if (lastEl) { lastEl.textContent = m.content; scroll(); } });
   bus.on('ai:tools', (calls) => {
     const d = document.createElement('div'); d.className = 'toolrun';
     d.innerHTML = calls.map((c, i) => `<span style="--c:${COLORS[i % cursorConfig.count % 8]}"><i></i>${esc(VERB[c.name] || c.name)}${c.args?.name ? ' · ' + esc(c.args.name) : c.args?.target ? ' · ' + esc(c.args.target) : ''}</span>`).join('');
@@ -61,7 +62,8 @@ export function initAIPanel() {
 
 const log = () => { const l = $('#ai-log'); l.querySelector('.ai-empty')?.remove(); return l; };
 const scroll = () => { const l = $('#ai-log'); l.scrollTo({ top: l.scrollHeight, behavior: 'smooth' }); };
-function addMsg(role, content) { const d = document.createElement('div'); d.className = `msg ${role}`; d.textContent = content; log().appendChild(d); scroll(); }
+let lastEl = null;
+function addMsg(role, content) { const d = document.createElement('div'); d.className = `msg ${role}`; d.textContent = content; log().appendChild(d); lastEl = d; scroll(); }
 
 function setBusy(b) {
   busy = b; const s = $('#ai-send');
@@ -72,7 +74,7 @@ function renderEmpty() {
   const p = getProvider(settings.provider);
   $('#ai-log').innerHTML = `<div class="ai-empty"><b>${providerLogo(p, 24)} O que vamos criar?</b>
     ${p.format === 'demo' ? 'Modo demo: roteiro offline que mostra os cursores. <a href="#" data-cfg>Conecte uma IA</a> para pedidos livres.' : `Conectado a ${esc(p.name)}. Cada ação aparece com seu próprio cursor.`}
-    <button data-s='Crie uma intro de motion com o texto "ARGILA", partículas mágicas e um whoosh'>${icon('sparkle', 16)} Intro de motion com texto 3D</button>
+    <button data-s='Crie uma intro de motion com o texto "MESH", partículas mágicas e um whoosh'>${icon('sparkle', 16)} Intro de motion com texto 3D</button>
     <button data-s="Monte uma cena de produto: pedestal de mármore, uma esfera metálica, luz de recorte e câmera">${icon('camera', 16)} Cena de produto</button>
     <button data-s="Crie 5 cubos em arco, cada um com uma cor e animação de quicar defasada">${icon('cube', 16)} Cubos animados em arco</button></div>`;
   $('#ai-log').onclick = (e) => {
@@ -103,7 +105,7 @@ function openProviderPicker(anchor) {
   let q = '';
   const draw = () => {
     const match = (x) => x.name.toLowerCase().includes(q);
-    const groups = [['Offline', PROVIDERS.filter((x) => x.format === 'demo')], ['Locais (no seu PC)', PROVIDERS.filter((x) => x.local && x.format !== 'demo')], ['Nuvem', PROVIDERS.filter((x) => !x.local)]];
+    const groups = [['Suas contas (sem chave de API)', PROVIDERS.filter((x) => x.format === 'account')], ['Offline', PROVIDERS.filter((x) => x.format === 'demo')], ['Locais (no seu PC)', PROVIDERS.filter((x) => x.local && x.format !== 'demo')], ['Nuvem (chave de API)', PROVIDERS.filter((x) => !x.local && x.format !== 'account')]];
     pop.querySelector('.pp-list').innerHTML = groups.map(([n, list]) => { const l = list.filter(match); return l.length ? `<div class="sub-h">${n}</div>${l.map((x) => `<button data-p="${x.id}">${providerLogo(x, 22)}<span>${esc(x.name)}</span>${x.id === settings.provider ? icon('check', 15) : settings.keys[x.id] ? '<kbd>chave</kbd>' : ''}</button>`).join('')}` : ''; }).join('') || '<div class="empty">Nada encontrado</div>';
   };
   pop.innerHTML = `<label class="search">${icon('search', 15)}<input placeholder="Buscar provedor…"></label><div class="pp-list" style="max-height:52vh;overflow:auto"></div>`;

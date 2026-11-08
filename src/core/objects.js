@@ -64,7 +64,7 @@ export function createPrimitive(type = 'cube', opts = {}) {
   return finish(mesh, { name: NAMES[type], ...opts }, 'mesh');
 }
 
-export function createText(text = 'Argila', opts = {}) {
+export function createText(text = 'Mesh', opts = {}) {
   const size = opts.size ?? 0.5;
   const tg = new TextGeometry(text, {
     font, size, depth: opts.depth ?? size * 0.25, curveSegments: 8,

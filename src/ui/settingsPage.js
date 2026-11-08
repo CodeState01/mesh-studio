@@ -12,10 +12,10 @@ import { toast } from './toast.js';
 
 const esc = (s) => String(s ?? '').replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
 const SECTIONS = [
-  ['ai', 'IA e provedores', 'chat'], ['look', 'Aparência', 'sun'], ['viewport', 'Viewport', 'cube'],
+  ['accounts', 'Contas (sem API)', 'UserRound'], ['ai', 'Provedores com API', 'chat'], ['look', 'Aparência', 'sun'], ['viewport', 'Viewport', 'cube'],
   ['cursors', 'Cursores da IA', 'select'], ['mcp', 'MCP', 'plug'], ['updates', 'Atualizações', 'download'], ['about', 'Sobre', 'home'],
 ];
-let section = 'ai', sel = null, filter = '';
+let section = 'accounts', sel = null, filter = '';
 
 export function renderSettings(el, sec) {
   if (sec) section = sec;
@@ -25,7 +25,7 @@ export function renderSettings(el, sec) {
     <section class="set-content" id="set-content"></section></div></div>`;
   el.querySelector('#set-nav').onclick = (e) => { const b = e.target.closest('[data-s]'); if (b) { section = b.dataset.s; renderSettings(el); } };
   const c = el.querySelector('#set-content');
-  ({ ai: secAI, look: secLook, viewport: secViewport, cursors: secCursors, mcp: secMCP, updates: secUpdates, about: secAbout }[section])(c, el);
+  ({ accounts: secAccounts, ai: secAI, look: secLook, viewport: secViewport, cursors: secCursors, mcp: secMCP, updates: secUpdates, about: secAbout }[section])(c, el);
   c.querySelectorAll('input,select,textarea').forEach((i) => i.addEventListener('keydown', (e) => e.stopPropagation()));
 }
 
@@ -68,7 +68,7 @@ function secAI(c, page) {
 }
 
 function secLook(c) {
-  const p = settings.prefs; const ACC = ['#e2703f', '#e5534b', '#d9a441', '#7bd389', '#3dd6ff', '#6f8cff', '#b98cff', '#ff6fb5'];
+  const p = settings.prefs; const ACC = ['#b9f23c', '#e2703f', '#e5534b', '#d9a441', '#7bd389', '#3dd6ff', '#6f8cff', '#b98cff', '#ff6fb5'];
   c.innerHTML = `<h2>Aparência</h2>
     ${slider('exp', 'Brilho da cena (exposição)', p.exposure, 0.3, 1.6, 0.05, (v) => v.toFixed(2))}
     ${slider('bloom', 'Brilho/glow (bloom)', p.bloom, 0, 1.5, 0.01, (v) => v.toFixed(2))}
@@ -108,25 +108,55 @@ function secCursors(c) {
 }
 
 async function secMCP(c) {
-  const info = window.argila?.app ? await window.argila.app.info() : { mcpPort: 47821, mcpServerPath: '<pasta-do-argila>/mcp/server.mjs' };
+  const info = window.meshApp?.app ? await window.meshApp.app.info() : { mcpPort: 47821, mcpServerPath: '<pasta-do-mesh>/mcp/server.mjs' };
   const path = info.mcpServerPath.replace(/\\/g, '/');
   c.innerHTML = `<h2>MCP — controle por outras IAs</h2>
-    <p class="muted">O Argila expõe suas ferramentas via Model Context Protocol. Claude Desktop, Claude Code, Cursor, Windsurf e outros podem modelar, animar e renderizar aqui — cada ação aparece com um cursor.</p>
-    <h3>Claude Desktop / Cursor</h3><div class="code">${esc(JSON.stringify({ mcpServers: { argila: { command: 'node', args: [path] } } }, null, 2))}</div>
-    <h3>Claude Code</h3><div class="code">claude mcp add argila -- node "${esc(path)}"</div>
-    <p class="muted">Ponte local em ws://127.0.0.1:${info.mcpPort} (somente este computador). O Argila precisa estar aberto.</p>`;
+    <p class="muted">O Mesh expõe suas ferramentas via Model Context Protocol. Claude Desktop, Claude Code, Cursor, Windsurf e outros podem modelar, animar e renderizar aqui — cada ação aparece com um cursor.</p>
+    <h3>Claude Desktop / Cursor</h3><div class="code">${esc(JSON.stringify({ mcpServers: { mesh: { command: 'node', args: [path] } } }, null, 2))}</div>
+    <h3>Claude Code</h3><div class="code">claude mcp add mesh -- node "${esc(path)}"</div>
+    <p class="muted">Ponte local em ws://127.0.0.1:${info.mcpPort} (somente este computador). O Mesh precisa estar aberto.</p>`;
 }
 
 async function secUpdates(c) {
-  const info = window.argila?.app ? await window.argila.app.info() : { version: 'web' };
+  const info = window.meshApp?.app ? await window.meshApp.app.info() : { version: 'web' };
   c.innerHTML = `<h2>Atualizações</h2>
     <div class="set-row"><div><b>Versão instalada</b></div><span class="mono">${esc(info.version)}</span></div>
     <p class="muted">O app verifica novas versões ao abrir e a cada 4 horas (GitHub Releases), baixa em segundo plano e avisa quando puder reiniciar.</p>
     <div class="set-actions"><button class="btn" id="chk">Verificar agora</button><span id="ures" class="muted"></span></div>`;
-  c.querySelector('#chk').onclick = async () => { const r = c.querySelector('#ures'); if (!window.argila?.update) { r.textContent = 'Disponível apenas no app instalado.'; return; } r.textContent = 'Verificando…'; await window.argila.update.check(); };
+  c.querySelector('#chk').onclick = async () => { const r = c.querySelector('#ures'); if (!window.meshApp?.update) { r.textContent = 'Disponível apenas no app instalado.'; return; } r.textContent = 'Verificando…'; await window.meshApp.update.check(); };
 }
 
 function secAbout(c) {
-  c.innerHTML = `<div class="about">${LOGO(72)}<h2>Argila Studio</h2><p class="muted">Modelagem, escultura, animação, VFX/SFX e vídeo com IA.<br>Código aberto sob licença MIT.</p>
+  c.innerHTML = `<div class="about">${LOGO(72)}<h2>Mesh</h2><p class="muted">Modelagem, escultura, animação, VFX/SFX e vídeo com IA.<br>Código aberto sob licença MIT.</p>
     <p class="muted">Assets da Comunidade: Poly Haven (CC0). Fonte 3D: Helvetiker (licença inclusa).</p></div>`;
+}
+
+// ---------- Contas: usar sua assinatura (Gemini/Claude/ChatGPT) em vez de chave de API ----------
+const ACCOUNT_PROVIDER = { gemini: 'acct-gemini', claude: 'acct-claude', codex: 'acct-chatgpt' };
+async function secAccounts(c, page) {
+  c.innerHTML = `<h2>Contas</h2><p class="muted">Use a conta que você já tem — grátis, Pro, Plus ou Max — em vez de pagar API. O Mesh roda a ferramenta oficial de cada empresa, que faz login com a sua conta, e entrega a ela <b>somente</b> as ferramentas do Mesh (sem terminal, sem arquivos, sem web).</p><div id="acc-list" class="muted" style="margin-top:14px">Verificando…</div>`;
+  if (!window.meshApp?.agents) { c.querySelector('#acc-list').textContent = 'Disponível apenas no app desktop.'; return; }
+  const st = await window.meshApp.agents.status();
+  c.querySelector('#acc-list').outerHTML = `<div class="engine-grid">${Object.values(st).map((a) => {
+    const p = getProvider(ACCOUNT_PROVIDER[a.id]); const using = settings.provider === p.id;
+    const chip = (ok, yes, no) => `<span class="${ok ? 'free' : 'muted'}" style="font-size:12px">${icon(ok ? 'check' : 'close', 13)} ${ok ? yes : no}</span>`;
+    return `<article class="engine" style="--ec:#b9f23c">
+      <header>${providerLogo(p, 32)}<b>${a.name}</b>${using ? '<span class="live-pill">em uso</span>' : ''}</header>
+      <p>${a.account}</p>
+      <div style="display:flex;gap:14px;align-items:center">${chip(a.installed, 'Instalado', 'Não instalado')}${chip(a.loggedIn, 'Conta conectada', 'Sem login')}${a.runnable ? '' : '<span class="muted" style="font-size:12px">· agente em breve</span>'}</div>
+      ${a.installed ? '' : `<div class="code" style="white-space:pre-wrap">${esc(a.install)}</div><small class="muted">Rode este comando no PowerShell para instalar a ferramenta oficial.</small>`}
+      <footer>
+        <button class="btn sm" data-copy="${esc(a.install)}" ${a.installed ? 'style="display:none"' : ''}>${icon('copy', 14)} Copiar comando</button>
+        <button class="btn sm" data-login="${a.id}" ${a.installed ? '' : 'disabled'}>${icon('UserRound', 14)} ${a.loggedIn ? 'Trocar conta' : 'Conectar conta'}</button>
+        <button class="btn sm primary" data-use="${p.id}" ${a.installed && a.loggedIn && a.runnable && !using ? '' : 'disabled'}>${icon('bot', 14)} Usar no assistente</button>
+      </footer></article>`;
+  }).join('')}</div>
+  <p class="muted" style="margin-top:14px;font-size:12px">${icon('info', 13)} O uso conta nos limites da sua assinatura. Para trocar de conta, clique em “Trocar conta”. Depois de entrar no navegador, volte aqui e clique em Atualizar.</p>
+  <button class="btn sm" id="acc-refresh" style="margin-top:6px">${icon('refresh', 14)} Atualizar</button>`;
+  c.onclick = async (e) => {
+    const l = e.target.closest('[data-login]'); if (l) { await window.meshApp.agents.login(l.dataset.login); toast('Conclua o login na janela que abriu'); }
+    const u = e.target.closest('[data-use]'); if (u) { settings.provider = u.dataset.use; saveSettings(); toast('Assistente usando sua conta'); secAccounts(c, page); }
+    const cp = e.target.closest('[data-copy]'); if (cp) { navigator.clipboard.writeText(cp.dataset.copy); toast('Comando copiado'); }
+    if (e.target.closest('#acc-refresh')) secAccounts(c, page);
+  };
 }

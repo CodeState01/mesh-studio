@@ -6,8 +6,10 @@ import { registerCommand, runCommand, commands, keyOf } from '../core/commands.j
 import { state, bus, select, selectMany, precision } from '../core/state.js';
 import { history } from '../core/history.js';
 import { content, createPrimitive, createText, createLight, createCamera, PRIMITIVES } from '../core/objects.js';
-import { setTool, setShading, frameSelected, viewAxis, lookThrough, getRenderCamera, captureImage, renderer } from '../core/viewport.js';
-import { toggleEditMode, selectAllVerts, setSelectMode, edit, ops, EDIT_KEYS, invertSelection, selectLinked } from '../core/editmode.js';
+import { setTool, setShading, frameSelected, viewAxis, lookThrough, getRenderCamera, captureImage, renderer, cursor3D } from '../core/viewport.js';
+import { toggleEditMode, selectAllVerts, setSelectMode, edit, ops, EDIT_KEYS, invertSelection, selectLinked, showMeshParts, cancelPending } from '../core/editmode.js';
+import { toggleFly, isFlying } from '../core/fly.js';
+import { PANELS, popOut, resetLayout } from './layout.js';
 import { startModal, isModal, cursorToSelection, cursorToOrigin, selectionToCursor, clearMeasures } from '../core/precision.js';
 import { booleanOp } from '../core/boolean.js';
 import { sculpt, BRUSHES, prepareForSculpt } from '../core/sculpt.js';
@@ -170,7 +172,7 @@ function registerAll() {
   R('origin-geometry', 'Origem no centro da geometria', originToGeometry, null, 'Editar', 'crosshair');
   // Adicionar
   PRIMITIVES.forEach((p) => R('add-' + p, PRIM_LABEL[p], () => addWithUndo(createPrimitive(p), 'Adicionar'), null, 'Adicionar', p));
-  R('add-text', 'Texto 3D', async () => { const t = await askText('Texto 3D', 'Argila'); if (t) addWithUndo(createText(t), 'Texto'); }, null, 'Adicionar', 'text');
+  R('add-text', 'Texto 3D', async () => { const t = await askText('Texto 3D', 'Mesh'); if (t) addWithUndo(createText(t), 'Texto'); }, null, 'Adicionar', 'text');
   Object.keys(LIGHT_LABEL).forEach((l) => R('add-light-' + l, LIGHT_LABEL[l], () => addWithUndo(createLight(l), 'Luz'), null, 'Luz', l));
   R('add-camera', 'Câmera', () => addWithUndo(createCamera(), 'Câmera'), null, 'Luz', 'camera');
   VFX_TYPES.forEach((v) => R('add-vfx-' + v, VFX_LABEL[v], () => addWithUndo(createVFX(v, { position: [0, 0, 0] }), 'VFX'), null, 'VFX', v));
@@ -195,7 +197,7 @@ function registerAll() {
   R('mode-vertex', 'Modo vértice', () => setSelectMode('vertex'), null, 'Modelagem', 'vertex');
   R('mode-edge', 'Modo aresta', () => setSelectMode('edge'), null, 'Modelagem', 'edge');
   R('mode-face', 'Modo face', () => setSelectMode('face'), null, 'Modelagem', 'face');
-  R('extrude', 'Extrudar', () => (state.mode === 'edit' ? ops.extrude() : toast('Entre no modo Editar (Tab)')), null, 'Modelagem', 'extrude', 'E no modo Editar');
+  R('extrude', 'Extrudar', () => ops.extrude(), null, 'Modelagem', 'extrude', 'E no modo Editar — fora dele, mostra as partes da malha');
   R('inset', 'Inset', () => ops.inset(), null, 'Modelagem', 'inset', 'I no modo Editar');
   R('bevel', 'Bevel', () => ops.bevel(), null, 'Modelagem', 'bevel', 'Ctrl+B no modo Editar');
   R('loopcut', 'Loop Cut', () => ops.loopCut(lastMouse), null, 'Modelagem', 'loopcut', 'Ctrl+R no modo Editar');
@@ -238,6 +240,19 @@ function registerAll() {
   R('palette', 'Buscar comando', openPalette, 'Ctrl+K', 'Ajuda', 'search');
   registerCommand({ id: 'palette2', label: 'Buscar comando', run: openPalette, keys: 'F3' });
   R('mcp', 'Conectar outra IA via MCP', () => navigate('settings', 'mcp'), null, 'Ajuda', 'plug');
+  // Câmera de voo, simetria, partes da malha
+  R('reset-layout', 'Restaurar posição dos painéis', resetLayout, null, 'Exibir', 'LayoutDashboard');
+  PANELS.forEach(([id, n]) => R('pop-' + id, 'Abrir em janela separada: ' + n, () => popOut(id), null, 'Exibir', 'external'));
+  R('fly-toggle', 'Modo voo (WASD + mouse)', toggleFly, 'Shift+F', 'Exibir', 'Plane', 'Ou segure o botão direito');
+  R('mirror-x', 'Simetria X na edição', () => { precision.mirrorX = !precision.mirrorX; bus.emit('precision'); renderPrecision(); toast(precision.mirrorX ? 'Simetria X ligada' : 'Simetria X desligada'); }, 'Shift+X', 'Precisão', 'FlipHorizontal2');
+  R('mesh-parts', 'Mostrar partes das malhas', () => { precision.showParts = !precision.showParts; showMeshParts(precision.showParts); }, 'Alt+Z', 'Exibir', 'Grid3x3');
+  // Hierarquia e visibilidade (como no Blender)
+  R('parent', 'Definir pai (seleção → ativo)', setParent, 'Ctrl+P', 'Editar', 'parent');
+  R('unparent', 'Limpar pai', clearParent, 'Alt+P', 'Editar', 'unlink');
+  R('hide', 'Ocultar seleção', () => setHidden(state.selection, true), 'H', 'Exibir', 'eyeoff');
+  R('unhide', 'Mostrar tudo', () => { const all = []; content.traverse((o) => { if (o.userData.id && !o.visible) all.push(o); }); setHidden(all, false); }, 'Alt+H', 'Exibir', 'eye');
+  R('isolate', 'Isolar seleção (ocultar o resto)', () => setHidden(content.children.filter((o) => !state.selection.includes(o) && o.visible), true), 'Shift+H', 'Exibir', 'Focus');
+  R('origin-cursor', 'Origem no cursor 3D', originToCursor, null, 'Editar', 'cursor3d');
   bus.on('cmd', (id) => runCommand(id));
   bus.on('navigate', ({ page, section }) => navigate(page, section));
 }
@@ -275,7 +290,7 @@ bus.on('camera:view', (c) => $('#cam-badge').classList.toggle('on', !!c));
 async function renderImage(w = 1920, h = 1080) {
   let cam = getRenderCamera(); if (!cam) content.traverse((o) => { if (!cam && o.isCamera) cam = o; });
   const url = captureImage(w, h, cam || undefined); const data = Uint8Array.from(atob(url.split(',')[1]), (c) => c.charCodeAt(0));
-  if (window.argila?.file) { const p = await window.argila.file.save({ name: 'render.png', data, binary: true, filters: [{ name: 'PNG', extensions: ['png'] }] }); if (p) toast('Render salvo'); }
+  if (window.meshApp?.file) { const p = await window.meshApp.file.save({ name: 'render.png', data, binary: true, filters: [{ name: 'PNG', extensions: ['png'] }] }); if (p) toast('Render salvo'); }
   else { const a = document.createElement('a'); a.href = url; a.download = 'render.png'; a.click(); }
 }
 
@@ -346,7 +361,7 @@ export function renderPrecision() {
   const sel = (id, opts, val) => `<select class="pb-select" data-p="${id}">${opts.map(([v, n]) => `<option value="${v}" ${v === val ? 'selected' : ''}>${n}</option>`).join('')}</select>`;
   el.innerHTML = `
     <button class="pb-btn ${p.snap ? 'on' : ''}" data-a="snap" data-tip="Snap (Shift+Tab) — Ctrl inverte">${icon('magnet', 16)}</button>
-    ${sel('snapTarget', [['increment', 'Incremento'], ['grid', 'Grade'], ['vertex', 'Vértice']], p.snapTarget)}
+    ${sel('snapTarget', [['increment', 'Incremento'], ['grid', 'Grade'], ['vertex', 'Vértice'], ['edge', 'Meio de aresta'], ['face', 'Centro de face']], p.snapTarget)}
     <label class="pb-num" data-tip="Passo de movimento">${icon('move', 13)}<input data-n="moveStep" value="${p.moveStep}">m</label>
     <label class="pb-num" data-tip="Passo de rotação">${icon('rotate', 13)}<input data-n="rotateStep" value="${p.rotateStep}">°</label>
     <label class="pb-num" data-tip="Passo de escala">${icon('scale', 13)}<input data-n="scaleStep" value="${p.scaleStep}"></label>
@@ -357,11 +372,16 @@ export function renderPrecision() {
     <button class="pb-btn ${p.proportional ? 'on' : ''}" data-a="prop" data-tip="Edição proporcional (O)">${icon('proportional', 16)}</button>
     ${p.proportional ? `<label class="pb-num" data-tip="Raio proporcional">R<input data-n="propRadius" value="${p.propRadius}">m</label>${sel('propFalloff', [['smooth', 'Suave'], ['linear', 'Linear'], ['sharp', 'Agudo'], ['sphere', 'Esfera']], p.propFalloff)}` : ''}
     <i class="pb-sep"></i>
+    <button class="pb-btn ${p.mirrorX ? 'on' : ''}" data-a="mirror" data-tip="Simetria X na edição (Shift+X)">${icon('FlipHorizontal2', 16)}X</button>
+    <i class="pb-sep"></i>
+    <span data-tip="Unidade">${sel('unit', [['m', 'm'], ['cm', 'cm'], ['mm', 'mm'], ['in', 'pol']], p.unit)}</span>
+    <label class="pb-num" data-tip="Tamanho da grade">${icon('snapGrid', 13)}<input data-n="gridSize" value="${p.gridSize}">m</label>
+    <i class="pb-sep"></i>
     <button class="pb-btn ${state.tool === 'cursor' ? 'on' : ''}" data-a="cursor" data-tip="Cursor 3D (Shift+botão direito)">${icon('cursor3d', 16)}</button>
     <button class="pb-btn ${state.tool === 'measure' ? 'on' : ''}" data-a="measure" data-tip="Régua (Shift+M)">${icon('ruler', 16)}</button>`;
   el.onclick = (e) => {
     const a = e.target.closest('[data-a]')?.dataset.a; if (!a) return;
-    if (a === 'snap') p.snap = !p.snap; if (a === 'prop') p.proportional = !p.proportional;
+    if (a === 'snap') p.snap = !p.snap; if (a === 'prop') p.proportional = !p.proportional; if (a === 'mirror') p.mirrorX = !p.mirrorX;
     if (a === 'orient') p.orientation = p.orientation === 'local' ? 'global' : 'local';
     if (a === 'cursor') setTool(state.tool === 'cursor' ? 'move' : 'cursor');
     if (a === 'measure') { if (state.tool === 'measure') { setTool('move'); } else setTool('measure'); }
@@ -435,7 +455,7 @@ function drawStatus() {
     ${SHEETS.map((s) => `<button data-sheet="${s.id}" class="${sheetOpen === s.id ? 'on' : ''}" data-tip="${s.label}">${icon(s.icon, 17)}</button>`).join('')}
     <button id="mcp-st" class="${mcpN ? 'dot-ok' : ''}" data-tip="MCP: ${mcpN ? mcpN + ' IA(s) conectada(s)' : 'nenhuma IA externa'}">${icon('plug', 17)}</button>
     <button id="ai-tg" class="${aiOn ? 'on' : ''}" data-tip="Assistente (Ctrl+.)">${icon('bot', 17)}</button>`;
-  $('#upd')?.addEventListener('click', () => window.argila.update.install());
+  $('#upd')?.addEventListener('click', () => window.meshApp.update.install());
   $('#b-undo').onclick = () => history.undo(); $('#b-redo').onclick = () => history.redo();
   $('#tb-status').querySelectorAll('[data-sheet]').forEach((b) => (b.onclick = () => (sheetOpen === b.dataset.sheet ? closeSheet() : navigate(b.dataset.sheet))));
   $('#mcp-st').onclick = () => navigate('settings', 'mcp'); $('#ai-tg').onclick = toggleAI;
@@ -443,7 +463,7 @@ function drawStatus() {
 
 export function initShell() {
   registerAll();
-  $('#brand').innerHTML = `${LOGO(24)}<span>Argila</span>${icon('chevron', 14)}`;
+  $('#brand').innerHTML = `${LOGO(24)}<span>Mesh</span>${icon('chevron', 14)}`;
   $('#brand').onclick = (e) => { const r = e.currentTarget.getBoundingClientRect(); openAppMenu(r.left, r.bottom + 8); };
   $('#search-pill').innerHTML = `${icon('search', 15)}<span>Buscar…</span><kbd>Ctrl K</kbd>`; $('#search-pill').onclick = openPalette;
   $('#workspaces').innerHTML = WORKSPACES.map((w) => `<button data-ws="${w.id}" data-tip="${w.label} (Ctrl+${WORKSPACES.indexOf(w) + 1})">${icon(w.icon, 16)}<span>${w.label}</span></button>`).join('');
@@ -459,12 +479,16 @@ export function initShell() {
 
   $('#shading-seg').innerHTML = [['wire', 'wire', 'Arame'], ['solid', 'solid', 'Sólido'], ['material', 'material', 'Material'], ['render', 'render', 'Render']].map(([m, ic, n], i) => `<button data-s="${m}" data-tip="${n} (Shift+${i + 1})">${icon(ic, 16)}</button>`).join('');
   $('#shading-seg').onclick = (e) => { const b = e.target.closest('[data-s]'); if (b) setShading(b.dataset.s); };
+  const vx = document.createElement('div'); vx.className = 'seg sm vertical'; vx.id = 'view-extra'; vx.style.marginTop = '4px';
+  vx.innerHTML = `<button data-c="fly-toggle" data-tip="Voar: WASD + mouse (Shift+F ou segure o botão direito)">${icon('Plane', 16)}</button><button data-c="mesh-parts" data-tip="Mostrar partes das malhas (Alt+Z)">${icon('Grid3x3', 16)}</button><button data-c="frame" data-tip="Enquadrar (F)">${icon('frame', 16)}</button>`;
+  $('#view-tools').appendChild(vx); vx.onclick = (e) => { const b = e.target.closest('[data-c]'); if (b) runCommand(b.dataset.c); };
+  bus.on('fly', (on) => vx.querySelector('[data-c=fly-toggle]').classList.toggle('on', on)); bus.on('meshparts', (on) => vx.querySelector('[data-c=mesh-parts]').classList.toggle('on', on));
   bus.on('shading', (m) => document.querySelectorAll('#shading-seg button').forEach((b) => b.classList.toggle('on', b.dataset.s === m)));
   $('#vp-hint').innerHTML = 'Meio: girar · Shift+meio: mover · Roda: zoom · G/R/S + X/Y/Z + número: transformação exata';
 
   if (settings.prefs.aiOpen) document.body.classList.add('ai-open'); else $('#ai').classList.add('hidden');
-  window.argila?.mcp?.onStatus((d) => { mcpN = d.connected; drawStatus(); if (d.connected) toast('Uma IA externa se conectou via MCP'); });
-  window.argila?.update?.on((d) => { upd = d; drawStatus(); if (d.status === 'ready') toast(`Versão ${d.version} pronta`, { ms: 8000, action: { label: 'Reiniciar', run: () => window.argila.update.install() } }); });
+  window.meshApp?.mcp?.onStatus((d) => { mcpN = d.connected; drawStatus(); if (d.connected) toast('Uma IA externa se conectou via MCP'); });
+  window.meshApp?.update?.on((d) => { upd = d; drawStatus(); if (d.status === 'ready') toast(`Versão ${d.version} pronta`, { ms: 8000, action: { label: 'Reiniciar', run: () => window.meshApp.update.install() } }); });
   drawStatus(); renderPrecision();
   setupKeys();
   window.addEventListener('pointermove', (e) => { lastMouse.x = e.clientX; lastMouse.y = e.clientY; });
@@ -472,14 +496,44 @@ export function initShell() {
 
 function setupKeys() {
   window.addEventListener('keydown', (e) => {
-    if (isModal()) return;
+    if (isModal() || isFlying()) return;
     if (e.target?.closest?.('input, textarea, select, .cm-editor')) return;
     if ($('#modal-root').children.length) { if (e.key === 'Escape') $('#modal-root').innerHTML = ''; return; }
-    if (e.key === 'Escape') { if (sheetOpen) return closeSheet(); closePop(); if (state.mode === 'edit') toggleEditMode(); else if (state.mode === 'pose') togglePose(); return; }
+    if (e.key === 'Escape') { cancelPending(); if (sheetOpen) return closeSheet(); closePop(); if (state.mode === 'edit') toggleEditMode(); else if (state.mode === 'pose') togglePose(); return; }
     const k = keyOf(e);
     if (sheetOpen && !/^(Ctrl|F\d)/.test(k)) return;
     if (state.mode === 'edit' && EDIT_KEYS[k]) { e.preventDefault(); EDIT_KEYS[k](lastMouse); return; }
     const cmd = [...commands.values()].find((c) => c.keys === k);
     if (cmd) { e.preventDefault(); runCommand(cmd.id); }
   });
+}
+
+// ---------- Hierarquia, visibilidade e origem ----------
+// attach() preserva a posição no mundo: o objeto não "pula" ao ganhar/perder um pai.
+function setParent() {
+  const parent = state.selected; const kids = state.selection.filter((o) => o !== parent && !o.getObjectById?.(parent.id));
+  if (!parent || !kids.length) { toast('Selecione os filhos e, por último, o pai (Shift+clique)'); return; }
+  const before = kids.map((o) => o.parent); kids.forEach((o) => parent.attach(o));
+  history.push({ label: 'Definir pai', undo: () => kids.forEach((o, i) => before[i].attach(o)), redo: () => kids.forEach((o) => parent.attach(o)) });
+  bus.emit('scene:changed'); toast(`${kids.length} objeto(s) agora são filhos de “${parent.name}”`);
+}
+function clearParent() {
+  const objs = state.selection.filter((o) => o.parent && o.parent !== content); if (!objs.length) { toast('Nada com pai selecionado'); return; }
+  const before = objs.map((o) => o.parent); objs.forEach((o) => content.attach(o));
+  history.push({ label: 'Limpar pai', undo: () => objs.forEach((o, i) => before[i].attach(o)), redo: () => objs.forEach((o) => content.attach(o)) });
+  bus.emit('scene:changed');
+}
+function setHidden(objs, hidden) {
+  if (!objs.length) return; const prev = objs.map((o) => o.visible); objs.forEach((o) => (o.visible = !hidden));
+  history.push({ label: hidden ? 'Ocultar' : 'Mostrar', undo: () => objs.forEach((o, i) => (o.visible = prev[i])), redo: () => objs.forEach((o) => (o.visible = !hidden)) });
+  if (hidden) select(null); bus.emit('scene:changed');
+}
+function originToCursor() {
+  const o = state.selected; if (!o?.isMesh) return;
+  o.updateMatrixWorld(); const local = cursor3D.clone().applyMatrix4(o.matrixWorld.clone().invert());
+  const oldG = o.geometry, oldP = o.position.clone();
+  const g = o.geometry.clone().translate(-local.x, -local.y, -local.z); const wp = cursor3D.clone();
+  o.geometry = g; if (o.parent) o.parent.worldToLocal(wp); o.position.copy(wp); delete o.__em; const newP = o.position.clone();
+  history.push({ label: 'Origem → cursor', undo: () => { o.geometry = oldG; o.position.copy(oldP); }, redo: () => { o.geometry = g; o.position.copy(newP); } });
+  bus.emit('object:transformed', o);
 }

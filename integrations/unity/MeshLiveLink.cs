@@ -1,14 +1,14 @@
-// Argila → Unity: coloque este arquivo em Assets/Editor/.
+// Mesh → Unity: coloque este arquivo em Assets/Editor/.
 // Requer o pacote glTFast (com.unity.cloud.gltfast) para importar .glb.
-// Quando o Argila envia um .glb para Assets/Argila, o Unity reimporta e este script
+// Quando o Mesh envia um .glb para Assets/Mesh, o Unity reimporta e este script
 // atualiza (ou cria) a instância na cena aberta.
 #if UNITY_EDITOR
 using UnityEditor;
 using UnityEngine;
 
-public class ArgilaLiveLink : AssetPostprocessor
+public class MeshLiveLink : AssetPostprocessor
 {
-    const string Folder = "Assets/Argila";
+    const string Folder = "Assets/Mesh";
 
     static void OnPostprocessAllAssets(string[] imported, string[] deleted, string[] moved, string[] movedFrom)
     {
@@ -17,14 +17,14 @@ public class ArgilaLiveLink : AssetPostprocessor
             if (!path.StartsWith(Folder) || !(path.EndsWith(".glb") || path.EndsWith(".gltf"))) continue;
             var prefab = AssetDatabase.LoadAssetAtPath<GameObject>(path);
             if (prefab == null) continue;
-            var name = "Argila_" + prefab.name;
+            var name = "Mesh_" + prefab.name;
             var old = GameObject.Find(name);
             Vector3 pos = old ? old.transform.position : Vector3.zero;
             if (old) Object.DestroyImmediate(old);
             var inst = (GameObject)PrefabUtility.InstantiatePrefab(prefab);
             inst.name = name;
             inst.transform.position = pos;
-            Debug.Log("[Argila] atualizado: " + path);
+            Debug.Log("[Mesh] atualizado: " + path);
         }
     }
 }

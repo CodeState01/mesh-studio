@@ -1,9 +1,11 @@
-// Argila Studio — ponto de entrada do renderer.
+// Mesh — ponto de entrada do renderer.
 import { initViewport, setTool, setShading, applyEnvironment, setGridVisible } from './core/viewport.js';
 import { bindEditGizmo } from './core/editmode.js';
 import { initSculpt } from './core/sculpt.js';
 import { initPrecision } from './core/precision.js';
 import { initPaint } from './core/uv.js';
+import { initFly } from './core/fly.js';
+import { initLayout } from './ui/layout.js';
 import { content, createPrimitive, createLight, createCamera, addToScene } from './core/objects.js';
 import { select, bus } from './core/state.js';
 import { loadSettings, applyUIPrefs, settings } from './core/settings.js';
@@ -29,6 +31,7 @@ async function boot() {
   initSculpt();
   initPrecision();
   initPaint();
+  initFly();
   initCursors(settings.prefs.cursors);
   initShell();
   initOutliner();
@@ -36,6 +39,7 @@ async function boot() {
   initVideo($('#viewport'), $('#timeline'));
   initTimelineUI();
   initAIPanel();
+  initLayout();
   await loadPlugins();
 
   // Preferências de brilho/visual salvas
@@ -55,9 +59,9 @@ async function boot() {
   startAutosave();
 
   // Chamadas vindas de clientes MCP externos → executam com cursor animado.
-  window.argila?.mcp?.onCall(async ({ rid, tool, args }) => {
+  window.meshApp?.mcp?.onCall(async ({ rid, tool, args }) => {
     const r = await execWithCursor({ name: tool, args });
-    window.argila.mcp.reply({ rid, ok: r.ok, result: r.result, error: r.error });
+    window.meshApp.mcp.reply({ rid, ok: r.ok, result: r.result, error: r.error });
   });
 
   requestAnimationFrame(() => $('#boot').classList.add('out'));

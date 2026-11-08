@@ -3,7 +3,7 @@
 import { getProvider } from './providers.js';
 
 async function http(req) {
-  if (window.argila?.ai) return window.argila.ai.fetch(req); // via processo principal (sem CORS)
+  if (window.meshApp?.ai) return window.meshApp.ai.fetch(req); // via processo principal (sem CORS)
   const res = await fetch(req.url, { method: req.method || 'POST', headers: req.headers, body: req.body ? JSON.stringify(req.body) : undefined });
   const text = await res.text();
   let json = null; try { json = JSON.parse(text); } catch {}
@@ -57,7 +57,7 @@ export async function chat(cfg, { system, messages, tools }) {
   };
   const headers = { 'content-type': 'application/json' };
   if (cfg.key) headers.Authorization = `Bearer ${cfg.key}`;
-  if (p.id === 'openrouter') { headers['HTTP-Referer'] = 'https://argila.studio'; headers['X-Title'] = 'Argila Studio'; }
+  if (p.id === 'openrouter') { headers['HTTP-Referer'] = 'https://mesh.studio'; headers['X-Title'] = 'Mesh'; }
   const r = await http({ url: `${base}/chat/completions`, headers, body });
   if (!r.ok) throw new Error(errorOf(r));
   const msg = r.json.choices?.[0]?.message || {};

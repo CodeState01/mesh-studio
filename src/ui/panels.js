@@ -6,6 +6,8 @@ import { state, bus, select, precision } from '../core/state.js';
 import { history } from '../core/history.js';
 import { applyEnvironment, placePivot } from '../core/viewport.js';
 import { applyModifier } from '../core/modifiers.js';
+import { MODIFIERS } from '../core/modstack.js';
+import { addModifier, setParam, toggleModifier, moveModifier, removeModifier, applyModifierStack } from '../core/modruntime.js';
 import { edit, ops, setSelectMode, selectedPoints } from '../core/editmode.js';
 import { TEXTURES, applyTexture, proceduralTexture, textureFromFile } from '../fx/textures.js';
 import { anim, motionPreset, insertKey } from '../anim/timeline.js';
@@ -30,10 +32,12 @@ export function initOutliner() {
   $('#outliner-actions').onclick = (e) => { const a = e.target.closest('[data-a]')?.dataset.a; if (a === 'del') runCommand('delete'); if (a === 'add') runCommand('add-menu'); };
   const rows = [];
   const render = () => {
-    rows.length = 0; content.children.forEach((o) => { rows.push([o, 0]); if (o.isGroup && !o.userData.vfx) o.children.forEach((c) => rows.push([c, 1])); });
+    rows.length = 0;
+    const walk = (o, d) => { rows.push([o, d]); if (!o.userData.vfx && !o.isSkinnedMesh) o.children.forEach((c) => { if (c.userData?.id) walk(c, d + 1); }); };
+    content.children.forEach((o) => walk(o, 0));
     if (!rows.length) { el.innerHTML = `<div class="empty">${icon('layers', 30)}Cena vazia.<br>Shift+A para adicionar.</div>`; return; }
     el.innerHTML = rows.map(([o, d], i) => `
-      <div class="ol-row ${d ? 'child' : ''} ${state.selection.includes(o) ? 'sel' : ''} ${o === state.selected ? 'active' : ''}" data-i="${i}" style="${seen.has(o.uuid) ? 'animation:none' : ''}">
+      <div class="ol-row ${state.selection.includes(o) ? 'sel' : ''} ${o === state.selected ? 'active' : ''}" data-i="${i}" style="padding-left:${8 + d * 16}px;${seen.has(o.uuid) ? 'animation:none' : ''}">
         <span class="k">${icon(o.isSkinnedMesh ? 'bone' : KIND_ICON[o.userData.kind] || (o.isLight ? 'light' : o.isCamera ? 'camera' : 'cube'), 15)}</span>
         <span class="n">${esc(o.name)}</span>
         ${anim.tracks.has(o.userData.id) ? '<i class="anim-dot" title="Animado"></i>' : ''}
@@ -78,6 +82,7 @@ export function initProperties() {
   bus.on('edit:select-mode', () => tab === 'mesh' && state.mode === 'edit' && render());
   bus.on('uv:changed', () => tab === 'uv' && render());
   bus.on('physics', () => tab === 'physics' && render());
+  bus.on('modifiers:changed', () => tab === 'mesh' && state.mode !== 'edit' && render());
   bus.on('video:selection', (c) => { const same = c && lastClip && c.id === lastClip.id && $('#props').contains(document.activeElement); lastClip = c; if (state.workspace === 'video' && !same) renderClip(c); });
   bus.on('workspace', (ws) => { const map = { paint: 'uv', animate: 'motion', vfx: 'object', sculpt: 'mesh' }; if (map[ws]) setTab(map[ws]); else render(); });
   setTab('object');
@@ -193,16 +198,40 @@ function renderMesh(el, o) {
   el.innerHTML = `<div class="sec">${sec('info', 'Estatísticas')}<div class="info-grid"><div><b>${(em ? em.verts.length : g.attributes.position.count).toLocaleString()}</b><span>vértices</span></div><div><b>${(em ? em.faces.length : Math.round(tris)).toLocaleString()}</b><span>${em ? 'faces' : 'triângulos'}</span></div><div><b>${Math.round(tris).toLocaleString()}</b><span>tri</span></div></div></div>
     <div class="sec">${sec('mesh', 'Edição')}<button class="btn primary block" data-cmd="edit-mode">${icon('mesh', 15)} Editar vértices, arestas e faces <kbd>Tab</kbd></button>
       <div class="grid-btns two" style="margin-top:6px"><button class="chip" data-cmd="shade-smooth">${icon('smooth', 15)}Suave</button><button class="chip" data-cmd="shade-flat">${icon('face', 15)}Facetado</button></div></div>
-    <div class="sec">${sec('modifiers', 'Modificadores')}<div class="grid-btns">
-      ${[['array', 'Array', 'Copy'], ['mirror', 'Espelhar', 'FlipHorizontal2'], ['subdivide', 'Subdividir', 'Grid3x3'], ['decimate', 'Decimar', 'Minimize2'], ['twist', 'Torcer', 'RotateCw'], ['bend', 'Dobrar', 'Spline']].map(([id, n, ic]) => `<button class="chip" data-m="${id}">${icon(ic, 16)}${n}</button>`).join('')}</div></div>
-    <div class="sec">${sec('boolean', 'Booleana')}<button class="btn block" data-cmd="boolean">${icon('boolean', 15)} Unir / Subtrair / Interseção…</button></div>`;
-  const MODS = { array: { count: 4, offset: [1.2, 0, 0] }, mirror: { axis: 'x', amount: 0 }, subdivide: { amount: 0.12 }, decimate: { amount: 0.5 }, twist: { amount: 90 }, bend: { amount: 45 } };
+    <div class="sec">${sec('modifiers', 'Modificadores (não destrutivos)', (o.userData.modifiers || []).length)}
+      <div id="mstack"></div>
+      <div class="grid-btns" style="margin-top:6px">${Object.entries(MODIFIERS).map(([id, m]) => `<button class="chip" data-add="${id}">${icon(m.icon, 16)}${m.label.split(' ')[0]}</button>`).join('')}</div></div>
+    <div class="sec">${sec('boolean', 'Booleana e redução')}<div class="grid-btns two"><button class="chip" data-cmd="boolean">${icon('boolean', 15)}Booleana</button><button class="chip" data-m="decimate">${icon('Minimize2', 15)}Decimar 50%</button></div></div>`;
+  // Cartões da pilha: olho (liga/desliga), ↑↓ ordem, aplicar, excluir e parâmetros exatos
+  const stackEl = $('#mstack', el); const stack = o.userData.modifiers || [];
+  stack.forEach((m, i) => {
+    const def = MODIFIERS[m.type]; const card = document.createElement('div'); card.className = 'mod-card' + (m.enabled === false ? ' off' : '');
+    card.innerHTML = `<div class="mod-h">${icon(def.icon, 15)}<b>${def.label}</b><span class="spacer"></span>
+      <button class="icon-btn" data-a="toggle" title="Ligar/desligar">${icon(m.enabled === false ? 'eyeoff' : 'eye', 15)}</button>
+      <button class="icon-btn" data-a="up" title="Subir">${icon('ChevronUp', 15)}</button><button class="icon-btn" data-a="down" title="Descer">${icon('ChevronDown', 15)}</button>
+      <button class="icon-btn" data-a="apply" title="Aplicar na malha">${icon('check', 15)}</button><button class="icon-btn" data-a="del" title="Remover">${icon('trash', 15)}</button></div>`;
+    for (const [k, spec] of Object.entries(def.params)) {
+      const row = document.createElement('div'); row.className = 'row';
+      row.innerHTML = `<label>${PARAM_LABEL[k] || k}</label>`;
+      if (Array.isArray(spec[1])) { // enum (ex.: eixo)
+        const s = document.createElement('div'); s.className = 'seg sm'; s.innerHTML = spec[1].map((v) => `<button class="${m.params[k] === v ? 'on' : ''}" data-v="${v}" style="flex:1;justify-content:center">${v.toUpperCase()}</button>`).join('');
+        s.onclick = (e) => { const b = e.target.closest('[data-v]'); if (b) setParam(o, i, k, b.dataset.v); }; row.appendChild(s);
+      } else row.appendChild(numField('', m.params[k], (v, commit) => { if (commit) setParam(o, i, k, Math.min(spec[2], Math.max(spec[1], spec[3] >= 1 ? Math.round(v) : v))); }, spec[3] || 0.01));
+      card.appendChild(row);
+    }
+    card.onclick = (e) => {
+      const a = e.target.closest('[data-a]')?.dataset.a; if (!a) return;
+      ({ toggle: () => toggleModifier(o, i), up: () => moveModifier(o, i, -1), down: () => moveModifier(o, i, 1), apply: () => applyModifierStack(o, i), del: () => removeModifier(o, i) })[a]();
+    };
+    stackEl.appendChild(card);
+  });
   el.onclick = (e) => {
     const c = e.target.closest('[data-cmd]'); if (c) return runCommand(c.dataset.cmd);
-    const b = e.target.closest('[data-m]'); if (!b) return;
-    try { applyModifier(o, b.dataset.m, MODS[b.dataset.m]); delete o.__em; toast('Modificador aplicado'); bus.emit('scene:changed'); render(); } catch (err) { toast(err.message, { kind: 'error' }); }
+    const ad = e.target.closest('[data-add]'); if (ad) return addModifier(o, ad.dataset.add);
+    if (e.target.closest('[data-m=decimate]')) { try { applyModifier(o, 'decimate', { amount: 0.5 }); delete o.__em; toast('Malha reduzida'); render(); } catch (err) { toast(err.message, { kind: 'error' }); } }
   };
 }
+const PARAM_LABEL = { levels: 'Níveis', axis: 'Eixo', count: 'Cópias', offsetX: 'Desloc. X', offsetY: 'Desloc. Y', offsetZ: 'Desloc. Z', thickness: 'Espessura', angle: 'Ângulo °', strength: 'Força', scale: 'Escala', seed: 'Semente' };
 
 // Modo de edição: modos, operações e a POSIÇÃO EXATA da seleção (mediana dos vértices)
 let editFields = null;
@@ -294,7 +323,7 @@ function renderUV(el, o) {
   const tex = paintCanvas() || o.material?.map?.image; g.fillStyle = '#0d0e10'; g.fillRect(0, 0, W, W);
   if (tex) try { g.globalAlpha = 0.55; g.drawImage(tex, 0, 0, W, W); g.globalAlpha = 1; } catch {}
   const uv = o.geometry.attributes.uv;
-  if (uv) { g.strokeStyle = '#e2703f'; g.lineWidth = 1; g.beginPath(); for (let i = 0; i < uv.count; i += 3) { for (let k = 0; k < 3; k++) { const x = uv.getX(i + k) * W, y = (1 - uv.getY(i + k)) * W; k ? g.lineTo(x, y) : g.moveTo(x, y); } g.closePath(); } g.stroke(); }
+  if (uv) { g.strokeStyle = '#b9f23c'; g.lineWidth = 1; g.beginPath(); for (let i = 0; i < uv.count; i += 3) { for (let k = 0; k < 3; k++) { const x = uv.getX(i + k) * W, y = (1 - uv.getY(i + k)) * W; k ? g.lineTo(x, y) : g.moveTo(x, y); } g.closePath(); } g.stroke(); }
   el.onclick = (e) => { const b = e.target.closest('[data-uw]'); if (b) unwrap(o, b.dataset.uw); const go = e.target.closest('[data-go]'); if (go) bus.emit('navigate', { page: go.dataset.go }); };
   $('#pc', el).oninput = (e) => (paint.color = e.target.value);
   $('#ps', el).oninput = (e) => { paint.size = +e.target.value; el.querySelector('[data-for=ps]').value = paint.size; };

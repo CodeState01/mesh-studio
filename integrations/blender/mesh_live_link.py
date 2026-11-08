@@ -1,14 +1,14 @@
-# Argila Live Link — add-on para Blender 3.6+/4.x
+# Mesh Live Link — add-on para Blender 3.6+/4.x
 # Instalação: Edit > Preferences > Add-ons > Install... > este arquivo.
-# Painel: View3D > Sidebar (N) > Argila. Aponte para a pasta configurada no Argila (Engines > Blender).
-# Sempre que o Argila envia um .glb, o add-on reimporta na coleção "Argila".
+# Painel: View3D > Sidebar (N) > Mesh. Aponte para a pasta configurada no Mesh (Engines > Blender).
+# Sempre que o Mesh envia um .glb, o add-on reimporta na coleção "Mesh".
 bl_info = {
-    "name": "Argila Live Link",
-    "author": "Argila Studio",
+    "name": "Mesh Live Link",
+    "author": "Mesh",
     "version": (1, 0, 0),
     "blender": (3, 6, 0),
-    "location": "View3D > Sidebar > Argila",
-    "description": "Recarrega automaticamente modelos enviados pelo Argila Studio",
+    "location": "View3D > Sidebar > Mesh",
+    "description": "Recarrega automaticamente modelos enviados pelo Mesh",
     "category": "Import-Export",
 }
 
@@ -19,9 +19,9 @@ _state = {"mtimes": {}}
 
 
 def _collection():
-    col = bpy.data.collections.get("Argila")
+    col = bpy.data.collections.get("Mesh")
     if not col:
-        col = bpy.data.collections.new("Argila")
+        col = bpy.data.collections.new("Mesh")
         bpy.context.scene.collection.children.link(col)
     return col
 
@@ -39,7 +39,7 @@ def _reimport(path):
 
 
 def _poll():
-    props = bpy.context.scene.argila_link
+    props = bpy.context.scene.mesh_link
     if not props.enabled or not props.folder:
         return 1.0
     folder = bpy.path.abspath(props.folder)
@@ -53,42 +53,42 @@ def _poll():
                 _state["mtimes"][p] = m
                 try:
                     _reimport(p)
-                    print("[Argila] recarregado:", name)
+                    print("[Mesh] recarregado:", name)
                 except Exception as e:  # noqa: BLE001
-                    print("[Argila] falha:", e)
+                    print("[Mesh] falha:", e)
     return 1.0
 
 
-class ArgilaLinkProps(bpy.types.PropertyGroup):
+class MeshLinkProps(bpy.types.PropertyGroup):
     folder: bpy.props.StringProperty(name="Pasta", subtype="DIR_PATH")
     enabled: bpy.props.BoolProperty(name="Ativo", default=True)
 
 
-class ARGILA_PT_panel(bpy.types.Panel):
-    bl_label = "Argila Live Link"
+class MESH_PT_panel(bpy.types.Panel):
+    bl_label = "Mesh Live Link"
     bl_space_type = "VIEW_3D"
     bl_region_type = "UI"
-    bl_category = "Argila"
+    bl_category = "Mesh"
 
     def draw(self, context):
-        p = context.scene.argila_link
+        p = context.scene.mesh_link
         self.layout.prop(p, "folder")
         self.layout.prop(p, "enabled")
 
 
-classes = (ArgilaLinkProps, ARGILA_PT_panel)
+classes = (MeshLinkProps, MESH_PT_panel)
 
 
 def register():
     for c in classes:
         bpy.utils.register_class(c)
-    bpy.types.Scene.argila_link = bpy.props.PointerProperty(type=ArgilaLinkProps)
+    bpy.types.Scene.mesh_link = bpy.props.PointerProperty(type=MeshLinkProps)
     bpy.app.timers.register(_poll, persistent=True)
 
 
 def unregister():
     if bpy.app.timers.is_registered(_poll):
         bpy.app.timers.unregister(_poll)
-    del bpy.types.Scene.argila_link
+    del bpy.types.Scene.mesh_link
     for c in reversed(classes):
         bpy.utils.unregister_class(c)

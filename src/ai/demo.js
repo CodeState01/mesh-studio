@@ -4,7 +4,7 @@ let n = 0;
 const C = (name, args) => ({ id: 'demo' + ++n, name, args });
 
 export function demoPlan(prompt = '') {
-  const title = (prompt.match(/"([^"]+)"/)?.[1] || 'ARGILA').slice(0, 18);
+  const title = (prompt.match(/"([^"]+)"/)?.[1] || 'MESH').slice(0, 18);
   return [
     [
       C('set_environment', { sky: 'night', bloom: 0.3, fog: 0.025, exposure: 0.9 }),
@@ -15,7 +15,7 @@ export function demoPlan(prompt = '') {
     [
       C('add_text', { text: title, name: 'Título', size: 0.9, position: [0, 1.4, 0], color: '#ff6a3d', emissive: 0.6 }),
       C('add_primitive', { type: 'torusknot', name: 'Nó', position: [-3, 1.2, -1], color: '#d9dbe0' }),
-      C('add_primitive', { type: 'icosphere', name: 'Argila', position: [3, 1, -1], color: '#3dd6ff' }),
+      C('add_primitive', { type: 'icosphere', name: 'Mesh', position: [3, 1, -1], color: '#3dd6ff' }),
       C('add_vfx', { type: 'magic', name: 'Faíscas', position: [0, 0.2, 0.5], color: '#ff9b5e' }),
     ],
     [
@@ -33,7 +33,7 @@ export function demoPlan(prompt = '') {
     [
       C('add_camera', { name: 'Cam', position: [0, 2.2, 7.5], look_at: [0, 1.1, 0], fov: 38 }),
       C('video_add_clip', { kind: 'scene', start: 0, duration: 5, transition: 'fade' }),
-      C('video_add_clip', { kind: 'title', text: 'feito no Argila', start: 3, duration: 2, color: '#ffffff' }),
+      C('video_add_clip', { kind: 'title', text: 'feito no Mesh', start: 3, duration: 2, color: '#ffffff' }),
       C('set_timeline', { duration: 5, time: 0, play: true }),
     ],
   ];

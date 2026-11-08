@@ -65,7 +65,7 @@ function smartUnwrap(em, margin) {
 }
 
 // ---------- Pintura de textura ----------
-export const paint = { color: '#e2703f', size: 24, opacity: 1, hardness: 0.6, tool: 'brush', resolution: 1024 };
+export const paint = { color: '#b9f23c', size: 24, opacity: 1, hardness: 0.6, tool: 'brush', resolution: 1024 };
 let target = null, ctx = null, tex = null, stroke = null;
 
 export function preparePaint(mesh = state.selected) {

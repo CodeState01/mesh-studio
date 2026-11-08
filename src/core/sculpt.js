@@ -70,7 +70,7 @@ export function initSculpt() {
       const n = h.face.normal.clone().transformDirection(target.matrixWorld);
       ring.position.copy(h.point).addScaledVector(n, 0.002);
       ring.lookAt(h.point.clone().add(n)); ring.scale.setScalar(sculpt.radius);
-      ring.material.color.set(stroke ? '#e2703f' : '#ffffff');
+      ring.material.color.set(stroke ? '#b9f23c' : '#ffffff');
     }
     if (stroke) applyStroke(stroke, e, h);
   });

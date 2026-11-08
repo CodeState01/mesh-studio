@@ -7,7 +7,7 @@ import { acquireCursor } from '../ui/cursors.js';
 import { bus } from '../core/state.js';
 import { demoPlan } from './demo.js';
 
-const SYSTEM = `Você é o assistente de criação do Argila Studio, um app de modelagem 3D, animação, VFX/SFX e edição de vídeo.
+const SYSTEM = `Você é o assistente de criação do Mesh, um app de modelagem 3D, animação, VFX/SFX e edição de vídeo.
 Use as ferramentas para construir o que o usuário pede. Unidades em metros; Y é para cima; o chão é y=0.
 Rotação em graus. Tempo em segundos. Prefira chamar VÁRIAS ferramentas independentes na mesma resposta
 (elas rodam em paralelo). Dê nomes claros aos objetos e use esses nomes como "target" depois.
@@ -16,7 +16,7 @@ Responda curto em português.`;
 
 export const conversation = [];
 let abort = false;
-export const stopAgent = () => { abort = true; };
+export const stopAgent = () => { abort = true; stopAccountAgent(); };
 
 export async function execWithCursor(call) {
   const cur = await acquireCursor();
@@ -62,6 +62,8 @@ export async function runAgent(cfg, userText) {
     return;
   }
 
+  if (provider.format === 'account') return runAccountAgent(provider, cfg, userText);
+
   for (let step = 0; step < 16 && !abort; step++) {
     bus.emit('ai:thinking', true);
     let res;
@@ -84,3 +86,47 @@ export async function runAgent(cfg, userText) {
 }
 
 export function resetConversation() { conversation.length = 0; bus.emit('ai:reset'); }
+
+// ---------- Agente por CONTA (Gemini CLI / Claude Code com a conta do usuário) ----------
+// O CLI oficial roda fora do app e chama as ferramentas do Mesh via MCP; essas chamadas chegam
+// pela ponte e são executadas com cursor (main.js → execWithCursor). Aqui só exibimos o texto.
+let current = null; // { runId, resolve, el }
+let listening = false;
+function ensureListener() {
+  if (listening || !window.meshApp?.agents) return; listening = true;
+  window.meshApp.agents.onEvent((ev) => {
+    if (!current || (current.runId && ev.runId !== current.runId)) return;
+    if (ev.type === 'text') {
+      bus.emit('ai:thinking', false);
+      if (ev.delta && current.last) { current.last.content += ev.text; bus.emit('ai:message:update', current.last); }
+      else { current.last = { role: 'assistant', content: ev.text }; bus.emit('ai:message', current.last); }
+    }
+    // Só mostra ferramentas do Mesh (ignora as internas do CLI, ex.: busca de ferramentas)
+    if (ev.type === 'tool' && VERB[ev.name]) { current.last = null; bus.emit('ai:tools', [{ name: ev.name, args: {} }]); }
+    if (ev.type === 'done') {
+      bus.emit('ai:thinking', false);
+      if (ev.code && ev.error) bus.emit('ai:message', { role: 'error', content: ev.error });
+      const r = current.resolve; current = null; r();
+    }
+  });
+}
+
+async function runAccountAgent(provider, cfg, userText) {
+  if (!window.meshApp?.agents) { bus.emit('ai:message', { role: 'error', content: 'Contas só funcionam no app desktop.' }); return; }
+  ensureListener();
+  const st = (await window.meshApp.agents.status())[provider.cli];
+  if (!st?.installed) { bus.emit('ai:message', { role: 'error', content: `${st?.name || provider.name} não está instalado. Em Ajustes › Contas há o comando de instalação.` }); return; }
+  if (!st.loggedIn) { bus.emit('ai:message', { role: 'error', content: `Conecte sua conta ${st.name} em Ajustes › Contas.` }); return; }
+  if (!st.runnable) { bus.emit('ai:message', { role: 'error', content: `${st.name}: login detectado, mas a execução como agente ainda não é suportada.` }); return; }
+  // Os CLIs rodam uma tarefa por vez: enviamos um resumo curto da conversa + o pedido.
+  const history = conversation.filter((m) => (m.role === 'user' || m.role === 'assistant') && m.content).slice(-6, -1)
+    .map((m) => `${m.role === 'user' ? 'Usuário' : 'Você'}: ${m.content}`).join('\n');
+  const prompt = `${SYSTEM}\nUse SOMENTE as ferramentas do servidor MCP "mesh" para alterar a cena.\n${history ? `\nConversa anterior:\n${history}\n` : ''}\nPedido: ${userText}`;
+  bus.emit('ai:thinking', true);
+  await new Promise(async (resolve) => {
+    current = { runId: null, resolve, last: null };
+    try { current.runId = await window.meshApp.agents.run({ id: provider.cli, prompt, model: cfg.model || undefined }); }
+    catch (e) { bus.emit('ai:thinking', false); bus.emit('ai:message', { role: 'error', content: e.message }); current = null; resolve(); }
+  });
+}
+export function stopAccountAgent() { if (current?.runId) window.meshApp.agents.stop(current.runId); }

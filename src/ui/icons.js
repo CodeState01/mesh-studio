@@ -36,6 +36,18 @@ export function icon(name, size = 18, stroke = 1.75) {
   cache.set(k, svg); return svg;
 }
 
-// Logo do Argila: seixo de argila com marcas de dedo.
-export const LOGO_PATHS = `<path d="M16.4 3.2c7 .2 12.3 5.2 12.1 12.3-.2 7.6-6.1 13.5-13.3 13.3C8 28.6 3.4 23.2 3.5 16.4 3.7 8.6 9.3 3 16.4 3.2z" fill="#e2703f"/><path d="M8.2 20.6c4.8-.6 9.8-5.2 13.2-11.8" stroke="#3a1608" stroke-width="2.4" stroke-linecap="round" opacity=".5"/><path d="M12.6 24.4c3.6-1.2 7.4-4.4 10.2-9.4" stroke="#3a1608" stroke-width="1.8" stroke-linecap="round" opacity=".3"/>`;
-export const LOGO = (s = 22) => `<svg width="${s}" height="${s}" viewBox="0 0 32 32" fill="none" aria-label="Argila">${LOGO_PATHS}</svg>`;
+// Logo do Mesh: uma malha de quads levemente curvada (4×4 vértices), com uma face
+// e um vértice selecionados — o gesto central de quem modela.
+const R = [
+  [[7, 9], [13, 7.6], [19, 7.6], [25, 9]],
+  [[6, 14.6], [12.6, 13.6], [19.4, 13.6], [26, 14.6]],
+  [[6, 20.2], [12.6, 19.6], [19.4, 19.6], [26, 20.2]],
+  [[7, 25.6], [13, 26.2], [19, 26.2], [25, 25.6]],
+];
+const poly = (pts) => 'M' + pts.map((p) => p.join(' ')).join('L');
+export const LOGO_PATHS =
+  `<path d="${poly([R[1][1], R[1][2], R[2][2], R[2][1]])}Z" fill="#b9f23c" opacity=".3"/>` +
+  `<path d="${[0, 1, 2, 3].map((i) => poly(R[i])).join('')}${[0, 1, 2, 3].map((j) => poly(R.map((r) => r[j]))).join('')}" stroke="#e8e8e3" stroke-width="1.4" stroke-linejoin="round" opacity=".85"/>` +
+  R.flat().map(([x, y]) => `<circle cx="${x}" cy="${y}" r="1.35" fill="#e8e8e3"/>`).join('') +
+  `<circle cx="19.4" cy="13.6" r="2.5" fill="#b9f23c"/>`;
+export const LOGO = (s = 22) => `<svg width="${s}" height="${s}" viewBox="0 0 32 32" fill="none" aria-label="Mesh">${LOGO_PATHS}</svg>`;

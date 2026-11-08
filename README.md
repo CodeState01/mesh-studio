@@ -1,6 +1,6 @@
-# Argila Studio
+# Mesh
 
-Open-source desktop app (Windows) for **3D modeling, sculpting, materials, animation, VFX/SFX and video editing**. The interface is friendly instead of cockpit-like. Argila includes an AI assistant that works through **multiple cursors at once**, an **MCP server** for external AI clients, **70 AI providers** (19 of them local), a **store** with previews, a **Code Lab** with live preview, **engine export** and **auto-updates**.
+Open-source desktop app (Windows) for **3D modeling, sculpting, materials, animation, VFX/SFX and video editing**. The interface is friendly instead of cockpit-like. Mesh includes an AI assistant that works through **multiple cursors at once**, an **MCP server** for external AI clients, **70 AI providers** (19 of them local), a **store** with previews, a **Code Lab** with live preview, **engine export** and **auto-updates**.
 
 License: MIT.
 
@@ -34,15 +34,15 @@ npm run dist       # Windows installer in release/
 
 - Tools the model calls together **run in parallel, each with its own cursor** (1 to 8).
 - 51 cloud providers plus 19 local ones (Ollama, LM Studio, llama.cpp, vLLM…). To add a provider, add a line to `src/ai/providers.js`.
-- MCP: `claude mcp add argila -- node "<pasta>/mcp/server.mjs"`. Self-test: `node scripts/mcp-selftest.mjs`.
+- MCP: `claude mcp add mesh -- node "<pasta>/mcp/server.mjs"`. Self-test: `node scripts/mcp-selftest.mjs`.
 
 ## Engine integrations (`integrations/`)
 
 | Engine | How it works |
 |---|---|
-| Blender | `blender/argila_live_link.py` add-on. Reloads automatically on every send. |
-| Unreal | `unreal/argila_import.py` Python script. Imports into `/Game/Argila`. |
-| Unity | `unity/ArgilaLiveLink.cs`. Updates the instance in the scene. Requires glTFast. |
+| Blender | `blender/mesh_live_link.py` add-on. Reloads automatically on every send. |
+| Unreal | `unreal/mesh_import.py` Python script. Imports into `/Game/Mesh`. |
+| Unity | `unity/MeshLiveLink.cs`. Updates the instance in the scene. Requires glTFast. |
 | Godot | Native `.glb` import. See `godot/README.md`. |
 | Roblox | Uses Import 3D. See `roblox/README.md`. |
 
@@ -80,3 +80,18 @@ Credits: Poly Haven assets (CC0). Helvetiker font (license in `src/assets/FONT_L
 - **Rigging**: auto-rig with automatic weights, Pose mode, bone keyframes.
 - **Physics**: rigid bodies (cannon-es) with live simulation and bake-to-keyframes; Verlet **cloth** with pins and collisions.
 - **Graph editor** for animation curves (drag keys in time × value, per-key easing).
+
+## v0.3 — Mesh
+
+- **Use your account instead of an API key**: Settings › Contas connects the official CLIs that log in with your personal
+  subscription — **Gemini CLI** (Google account: free, Pro or Ultra) and **Claude Code** (Claude Pro/Max). Mesh runs them
+  headless and gives them **only** the Mesh MCP tools (no shell, no files, no web). ChatGPT/Codex: login detected, agent run coming soon.
+- **Non-destructive modifier stack**: Subdivision Surface (Catmull-Clark), Mirror (with seam weld), Array, Solidify, Twist,
+  Displace — toggle, reorder, apply. Covered by `node tests/modstack.test.mjs`.
+- **Fly camera**: hold right mouse → WASD + mouse look, Space/E up, Q/Ctrl down, Shift faster, wheel = speed; Shift+F toggles.
+- **Movable panels**: drag by the top grabber (magnetic snapping); drop outside the window or double-click to pop a panel
+  into its own window (second monitor). "Restaurar posição dos painéis" resets.
+- **Mesh tools without a mesh in edit**: Extrude/Bevel/… auto-enter Edit mode in the right sub-mode, or highlight the
+  vertices/edges of every mesh and wait for a click. Alt+Z toggles "show mesh parts".
+- **More precision**: X-mirror editing (Shift+X), snap to edge midpoints / face centers, display units (m/cm/mm/in),
+  grid size, parenting (Ctrl+P / Alt+P), hide / unhide / isolate (H / Alt+H / Shift+H), origin to 3D cursor, full outliner hierarchy.

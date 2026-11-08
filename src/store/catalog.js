@@ -49,7 +49,7 @@ export const MODELS = [
       part(box(0.35, 0.6, 0.05), M('#6b4a2f'), [0, 0.3, 0.66]), part(box(0.3, 0.3, 0.05), M('#9fd2ff', { metalness: 0.2, roughness: 0.1 }), [0.5, 0.65, 0.66])) },
   { id: 'rocket', name: 'Foguete', desc: 'Foguete de brinquedo', tags: 'ficção veículo', make: () =>
     G(part(lathe([[0, 0], [0.32, 0.05], [0.36, 0.8], [0.3, 1.4], [0.12, 1.85], [0, 2]]), M('#eeeeee', { roughness: 0.3 }), [0, 0.3, 0]),
-      [0, 1, 2].map((i) => part(box(0.05, 0.5, 0.35), M('#e2703f'), [Math.cos(i * 2.094) * 0.36, 0.5, Math.sin(i * 2.094) * 0.36], [0, -i * 2.094, 0])),
+      [0, 1, 2].map((i) => part(box(0.05, 0.5, 0.35), M('#b9f23c'), [Math.cos(i * 2.094) * 0.36, 0.5, Math.sin(i * 2.094) * 0.36], [0, -i * 2.094, 0])),
       part(new THREE.TorusGeometry(0.33, 0.04, 8, 32), M('#2a2b30', { metalness: 0.8 }), [0, 1.1, 0], [Math.PI / 2, 0, 0])) },
   { id: 'crystal', name: 'Cristal', desc: 'Aglomerado de cristais', tags: 'fantasia mineral', make: () =>
     G([[0, 0, 0, 1.1], [0.3, 0.2, -0.4, 0.7], [-0.3, -0.25, 0.3, 0.8], [0.15, 0.4, 0.3, 0.5]].map(([x, rz, rx, h]) =>
@@ -57,7 +57,7 @@ export const MODELS = [
   { id: 'lamp', name: 'Luminária', desc: 'Luminária de mesa articulada', tags: 'interior', make: () => {
     const k = M('#2a2b30', { metalness: 0.7, roughness: 0.35 });
     return G(part(cyl(0.35, 0.4, 0.08), k, [0, 0.04, 0]), part(cyl(0.03, 0.03, 0.9), k, [0.15, 0.48, 0], [0, 0, -0.35]), part(cyl(0.03, 0.03, 0.7), k, [0.2, 1.1, 0], [0, 0, 0.9]),
-      part(new THREE.ConeGeometry(0.25, 0.35, 24, 1, true), M('#e2703f', { side: THREE.DoubleSide }), [-0.12, 1.15, 0], [0, 0, 2.2]), part(new THREE.SphereGeometry(0.08), M('#fff4d6', { emissive: new THREE.Color('#ffd27a'), emissiveIntensity: 2 }), [-0.08, 1.1, 0]));
+      part(new THREE.ConeGeometry(0.25, 0.35, 24, 1, true), M('#b9f23c', { side: THREE.DoubleSide }), [-0.12, 1.15, 0], [0, 0, 2.2]), part(new THREE.SphereGeometry(0.08), M('#fff4d6', { emissive: new THREE.Color('#ffd27a'), emissiveIntensity: 2 }), [-0.08, 1.1, 0]));
   } },
   { id: 'mug', name: 'Caneca', desc: 'Caneca de cerâmica com alça', tags: 'cozinha objeto', make: () =>
     G(part(lathe([[0, 0], [0.35, 0], [0.37, 0.05], [0.37, 0.8], [0.33, 0.8], [0.33, 0.06], [0, 0.06]]), M('#2d6a8f', { roughness: 0.25, side: THREE.DoubleSide })), part(new THREE.TorusGeometry(0.2, 0.05, 12, 24, Math.PI), M('#2d6a8f', { roughness: 0.25 }), [0.37, 0.4, 0], [0, 0, -Math.PI / 2])) },
@@ -69,7 +69,7 @@ export const MODELS = [
       [[0.2, 0.85, 0.2], [-0.25, 0.8, 0.05], [0.05, 0.9, -0.25]].map((p) => part(new THREE.SphereGeometry(0.06), M('#ffffff'), p))) },
   { id: 'car', name: 'Carrinho', desc: 'Carro low-poly', tags: 'veículo', make: () => {
     const wheels = [[-0.55, 0.4], [0.55, 0.4], [-0.55, -0.4], [0.55, -0.4]].map(([x, z]) => part(cyl(0.18, 0.18, 0.12, 20), M('#1c1d21'), [x, 0.18, z], [Math.PI / 2, 0, 0]));
-    return G(part(box(1.6, 0.35, 0.8), M('#e2703f', { metalness: 0.4, roughness: 0.35 }), [0, 0.38, 0]), part(box(0.8, 0.3, 0.7), M('#9fd2ff', { metalness: 0.3, roughness: 0.1 }), [-0.1, 0.7, 0]), wheels);
+    return G(part(box(1.6, 0.35, 0.8), M('#b9f23c', { metalness: 0.4, roughness: 0.35 }), [0, 0.38, 0]), part(box(0.8, 0.3, 0.7), M('#9fd2ff', { metalness: 0.3, roughness: 0.1 }), [-0.1, 0.7, 0]), wheels);
   } },
   { id: 'cloud', name: 'Nuvem', desc: 'Nuvem fofa estilizada', tags: 'céu cenário', make: () =>
     G([[0, 0, 0, 0.5], [0.5, -0.05, 0, 0.38], [-0.5, -0.08, 0, 0.36], [0.2, 0.25, 0.1, 0.35]].map(([x, y, z, r]) => part(new THREE.SphereGeometry(r, 24, 16), M('#f5f7fb', { roughness: 0.9 }), [x, 1 + y, z]))) },

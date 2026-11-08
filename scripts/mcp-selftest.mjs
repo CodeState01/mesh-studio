@@ -1,13 +1,13 @@
 // Autoteste do servidor MCP: age como um cliente MCP (igual ao Claude Desktop),
-// lista as ferramentas e cria objetos na cena do Argila aberto.
-// Uso: com o Argila aberto → node scripts/mcp-selftest.mjs
+// lista as ferramentas e cria objetos na cena do Mesh aberto.
+// Uso: com o Mesh aberto → node scripts/mcp-selftest.mjs
 import { Client } from '@modelcontextprotocol/sdk/client/index.js';
 import { StdioClientTransport } from '@modelcontextprotocol/sdk/client/stdio.js';
 import { fileURLToPath } from 'node:url';
 import path from 'node:path';
 
 const server = path.join(path.dirname(fileURLToPath(import.meta.url)), '..', 'mcp', 'server.mjs');
-const client = new Client({ name: 'argila-selftest', version: '1.0.0' });
+const client = new Client({ name: 'mesh-selftest', version: '1.0.0' });
 await client.connect(new StdioClientTransport({ command: process.execPath, args: [server] }));
 
 const { tools } = await client.listTools();

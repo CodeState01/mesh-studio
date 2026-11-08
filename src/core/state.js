@@ -28,7 +28,9 @@ export const precision = {
   pivot: 'median',           // median | active | cursor | individual
   orientation: 'global',     // global | local
   proportional: false, propRadius: 1, propFalloff: 'smooth', // smooth | linear | sharp | sphere
-  unit: 'm', decimals: 3,
+  unit: 'm', decimals: 3, gridSize: 1,   // unidade de exibição (m, cm, mm, in) e tamanho da grade
+  mirrorX: false,            // simetria em X no modo de edição
+  showParts: false,          // mostra vértices/arestas de todas as malhas
 };
 
 /** Seleciona. opts.add: adiciona; opts.toggle: alterna; sem opts: substitui. */

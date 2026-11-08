@@ -1,18 +1,19 @@
-// Argila Studio — processo principal do Electron
+// Mesh — processo principal do Electron
 // Responsável por: janela, ponte MCP (WebSocket), proxy de IA (sem CORS),
 // armazenamento seguro de chaves, diálogos de arquivo e auto-update.
 const { app, BrowserWindow, ipcMain, dialog, safeStorage, shell, Menu } = require('electron');
-// Sem menu padrão do Electron: senão Ctrl+R recarrega a janela (no Argila é Loop Cut).
+// Sem menu padrão do Electron: senão Ctrl+R recarrega a janela (no Mesh é Loop Cut).
 Menu.setApplicationMenu(null);
 const path = require('node:path');
 const fs = require('node:fs');
 const { startBridge } = require('./bridge.cjs');
 const { setupUpdater } = require('./updater.cjs');
+const agents = require('./agents.cjs');
 
-const isDev = !!process.env.ARGILA_DEV;
+const isDev = !!process.env.MESH_DEV;
 // No modo de teste a janela pode estar "oculta" (sessão bloqueada/RDP): sem isso o
 // Chromium pausa a renderização e as capturas saem vazias.
-if (process.env.ARGILA_SMOKE) {
+if (process.env.MESH_SMOKE) {
   app.commandLine.appendSwitch('disable-features', 'CalculateNativeWinOcclusion');
   app.commandLine.appendSwitch('disable-renderer-backgrounding');
   app.commandLine.appendSwitch('disable-background-timer-throttling');
@@ -54,25 +55,31 @@ function createWindow() {
       preload: path.join(__dirname, 'preload.cjs'),
       contextIsolation: true,
       nodeIntegration: false,
-      backgroundThrottling: !process.env.ARGILA_SMOKE,
+      backgroundThrottling: !process.env.MESH_SMOKE,
     },
   });
-  // Smoke test automatizado (CI / verificação): ARGILA_SMOKE=caminho.png
-  if (process.env.ARGILA_SMOKE) {
+  // Smoke test automatizado (CI / verificação): MESH_SMOKE=caminho.png
+  if (process.env.MESH_SMOKE) {
     win.webContents.on('console-message', (_e, level, msg) => { if (level >= 2) console.log('[renderer]', msg); });
     win.webContents.on('did-finish-load', async () => {
-      const js = process.env.ARGILA_SMOKE_JS || '';
+      const js = process.env.MESH_SMOKE_JS || '';
       if (js) await new Promise((r) => setTimeout(r, 1200)).then(() => win.webContents.executeJavaScript(js).catch((e) => console.log('[smoke js]', e.message)));
       setTimeout(async () => {
         const img = await win.webContents.capturePage();
-        fs.writeFileSync(process.env.ARGILA_SMOKE, img.toPNG());
-        console.log('[smoke] ok', process.env.ARGILA_SMOKE); app.exit(0);
-      }, Number(process.env.ARGILA_SMOKE_WAIT || 4000));
+        fs.writeFileSync(process.env.MESH_SMOKE, img.toPNG());
+        console.log('[smoke] ok', process.env.MESH_SMOKE); app.exit(0);
+      }, Number(process.env.MESH_SMOKE_WAIT || 4000));
     });
   }
   if (isDev) win.loadURL('http://localhost:5173');
   else win.loadFile(path.join(__dirname, '..', 'dist', 'index.html'));
-  win.webContents.setWindowOpenHandler(({ url }) => { shell.openExternal(url); return { action: 'deny' }; });
+  // Painéis destacados (about:blank com nome mesh-*) viram janelas próprias; links normais abrem no navegador.
+  win.webContents.setWindowOpenHandler(({ url, frameName }) => {
+    if (String(frameName).startsWith('mesh-') && (url === 'about:blank' || url === '')) {
+      return { action: 'allow', overrideBrowserWindowOptions: { backgroundColor: '#16171a', autoHideMenuBar: true, icon: path.join(__dirname, '..', 'build', 'icon.png') } };
+    }
+    shell.openExternal(url); return { action: 'deny' };
+  });
 }
 
 // ---------- IPC ----------
@@ -141,3 +148,14 @@ app.whenReady().then(() => {
 
 app.on('window-all-closed', () => { if (process.platform !== 'darwin') app.quit(); });
 app.on('activate', () => { if (BrowserWindow.getAllWindows().length === 0) createWindow(); });
+
+// ---------- Agentes por conta (Gemini CLI / Claude Code), só com as ferramentas do Mesh ----------
+ipcMain.handle('agents:status', () => agents.status());
+ipcMain.handle('agents:login', (_e, id) => agents.openLogin(id));
+ipcMain.handle('agents:run', (e, { id, prompt, model }) => agents.run({
+  id, prompt, model,
+  serverPath: path.join(app.getAppPath(), 'mcp', 'server.mjs'),
+  workDir: path.join(app.getPath('userData'), 'agent-workspace'),
+  onEvent: (ev) => { if (!e.sender.isDestroyed()) e.sender.send('agents:event', ev); },
+}));
+ipcMain.handle('agents:stop', (_e, runId) => agents.stop(runId));

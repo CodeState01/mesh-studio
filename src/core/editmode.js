@@ -229,10 +229,21 @@ function beginTransform() {
     const R = precision.propRadius; const fall = { linear: (t) => t, sharp: (t) => t * t, sphere: (t) => Math.sqrt(1 - (1 - t) * (1 - t)), smooth: (t) => t * t * (3 - 2 * t) }[precision.propFalloff] || ((t) => t);
     startW.forEach((p, i) => { if (weights.has(i)) return; let d = Infinity; for (const v of vs) d = Math.min(d, p.distanceTo(startW[v])); if (d < R) weights.set(i, fall(1 - d / R)); });
   }
+  // Espelho em X (simetria): cada vértice movido leva junto o "gêmeo" do outro lado (x → −x)
+  const pairs = [];
+  if (precision.mirrorX) {
+    const key = (v, sx = 1) => `${Math.round(v.x * sx * 1e4)},${Math.round(v.y * 1e4)},${Math.round(v.z * 1e4)}`;
+    const idx = new Map(before.verts.map((v, i) => [key(v), i]));
+    for (const i of weights.keys()) { const j = idx.get(key(before.verts[i], -1)); if (j !== undefined && j !== i && !weights.has(j)) pairs.push([i, j]); }
+  }
   return {
     points: vs.map((v) => startW[v].clone()),
     applyMatrix(T) {
       for (const [i, w] of weights) { const p = startW[i].clone(); const q = p.clone().applyMatrix4(T); em.verts[i].copy(p.lerp(q, w).applyMatrix4(inv)); }
+      if (precision.mirrorX) {
+        for (const [i, j] of pairs) { const d = em.verts[i].clone().sub(before.verts[i]); em.verts[j].copy(before.verts[j]).add(new THREE.Vector3(-d.x, d.y, d.z)); }
+        for (const i of weights.keys()) if (Math.abs(before.verts[i].x) < 1e-4) em.verts[i].x = 0; // costura fica no centro
+      }
       edit.mesh.geometry.dispose(); edit.mesh.geometry = em.toGeometry(); updateOverlayPositions();
     },
     commit(label) { pushOp(label, before, em.clone()); placeHandle(); },
@@ -327,3 +338,51 @@ export const EDIT_KEYS = {
 
 // Leitura (sem efeitos colaterais) das posições de mundo dos vértices selecionados — usada pelo painel.
 export function selectedPoints() { return edit.mesh ? [...derivedVerts()].map(world) : []; }
+
+// ---------- Ferramenta de malha sem malha em edição ----------
+// Se o usuário escolhe Extrudar/Bevel/… fora do modo de edição:
+//  • há malha selecionada → entra no modo de edição já no sub-modo certo;
+//  • não há → destaca as PARTES (vértices + arestas) de todas as malhas e espera um clique.
+import { content } from './objects.js';
+let pending = null, parts = [];
+const WHAT = { face: 'as faces', edge: 'as arestas', vertex: 'os vértices' };
+
+export function showMeshParts(on) {
+  parts.forEach(({ m, g }) => { m.remove(g); g.traverse((o) => o.geometry?.dispose()); }); parts = [];
+  if (!on) { bus.emit('meshparts', false); return; }
+  content.traverse((m) => {
+    if (!m.isMesh || m.userData.proxy || m.userData.editHelper || m.userData.vfx || m === edit.mesh) return;
+    const g = new THREE.Group(); g.userData.editHelper = true; g.userData.noPick = true;
+    const lines = new THREE.LineSegments(new THREE.EdgesGeometry(m.geometry, 1), new THREE.LineBasicMaterial({ color: '#b9f23c', transparent: true, opacity: 0.75, depthTest: false }));
+    const pos = m.geometry.attributes.position; const uniq = new Map();
+    for (let i = 0; i < pos.count && uniq.size < 20000; i++) { const k = `${pos.getX(i).toFixed(4)},${pos.getY(i).toFixed(4)},${pos.getZ(i).toFixed(4)}`; if (!uniq.has(k)) uniq.set(k, [pos.getX(i), pos.getY(i), pos.getZ(i)]); }
+    const pg = new THREE.BufferGeometry(); pg.setAttribute('position', new THREE.Float32BufferAttribute([...uniq.values()].flat(), 3));
+    const pts = new THREE.Points(pg, new THREE.PointsMaterial({ color: '#ffffff', size: 5, sizeAttenuation: false, depthTest: false }));
+    [lines, pts].forEach((o) => { o.renderOrder = 995; o.raycast = () => {}; o.userData.editHelper = true; });
+    g.add(lines, pts); m.add(g); parts.push({ m, g });
+  });
+  bus.emit('meshparts', true);
+}
+
+export function ensureEdit(mode, toolName) {
+  if (state.mode === 'edit' && edit.mesh) { if (edit.select !== mode && mode) setSelectMode(mode); return true; }
+  const o = state.selected;
+  if (o?.isMesh && !o.userData.vfx && !o.isSkinnedMesh) {
+    enterEdit(o); setSelectMode(mode);
+    toast(`${toolName}: selecione ${WHAT[mode]} e use de novo`, { ms: 3500 });
+    return false;
+  }
+  let any = false; content.traverse((m) => { if (m.isMesh && !m.userData.proxy && !m.userData.vfx) any = true; });
+  if (!any) { toast('Não há malhas na cena — adicione uma (Shift+A)'); return false; }
+  pending = { mode, toolName }; showMeshParts(true);
+  toast(`${toolName}: clique numa malha (as partes dela estão destacadas)`, { ms: 4500 });
+  return false;
+}
+bus.on('selection', (o) => {
+  if (!pending) return;
+  if (o?.isMesh && !o.userData.vfx) { const p = pending; pending = null; showMeshParts(false); enterEdit(o); setSelectMode(p.mode); toast(`${p.toolName}: selecione ${WHAT[p.mode]} e use de novo`, { ms: 3500 }); }
+});
+export function cancelPending() { if (pending) { pending = null; showMeshParts(false); } }
+
+const NEED = { extrude: ['face', 'Extrudar'], inset: ['face', 'Inset'], bevel: ['edge', 'Bevel'], loopCut: ['edge', 'Loop Cut'], subdivide: ['face', 'Subdividir'], merge: ['vertex', 'Merge'], connect: ['vertex', 'Conectar'], fill: ['vertex', 'Preencher'], flip: ['face', 'Inverter normais'] };
+for (const [k, [mode, label]] of Object.entries(NEED)) { const fn = ops[k]; ops[k] = (...a) => (ensureEdit(mode, label) ? fn(...a) : undefined); }

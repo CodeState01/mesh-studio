@@ -1,6 +1,6 @@
 const { contextBridge, ipcRenderer } = require('electron');
 
-contextBridge.exposeInMainWorld('argila', {
+contextBridge.exposeInMainWorld('meshApp', {
   isDesktop: true,
   settings: {
     get: () => ipcRenderer.invoke('settings:get'),
@@ -19,6 +19,13 @@ contextBridge.exposeInMainWorld('argila', {
     check: () => ipcRenderer.invoke('update:check'),
     install: () => ipcRenderer.invoke('update:install'),
     on: (cb) => ipcRenderer.on('update:status', (_e, d) => cb(d)),
+  },
+  agents: {
+    status: () => ipcRenderer.invoke('agents:status'),
+    login: (id) => ipcRenderer.invoke('agents:login', id),
+    run: (opts) => ipcRenderer.invoke('agents:run', opts),
+    stop: (runId) => ipcRenderer.invoke('agents:stop', runId),
+    onEvent: (cb) => ipcRenderer.on('agents:event', (_e, d) => cb(d)),
   },
   mcp: {
     onCall: (cb) => ipcRenderer.on('mcp:call', (_e, d) => cb(d)),

@@ -44,21 +44,39 @@ function showAxis(axis, origin, local) {
   axisLine.material.color.set(AXIS_COLOR[axis]);
 }
 
-// ---------- Snap de vértice: vértice mais próximo do mouse (em pixels) ----------
-function nearestVertex(x, y, exclude = []) {
-  let best = null, bestD = 18; const v = new THREE.Vector3();
+// ---------- Snap a elementos: vértice, meio de aresta ou centro de face mais perto do mouse ----------
+export const SNAP_ELEMENTS = ['vertex', 'edge', 'face'];
+function candidates(o, target) {
+  const out = []; const p = o.geometry.attributes.position; if (!p || p.count > 60000) return out;
+  const idx = o.geometry.index; const at = (i) => new THREE.Vector3().fromBufferAttribute(p, idx ? idx.getX(i) : i);
+  if (target === 'vertex') { for (let i = 0; i < p.count; i++) out.push(new THREE.Vector3().fromBufferAttribute(p, i)); return out; }
+  if (target === 'face' && o.__em) { o.__em.faces.forEach((_, fi) => out.push(o.__em.faceCenter(fi))); return out; }
+  const n = idx ? idx.count : p.count;
+  for (let t = 0; t < n; t += 3) {
+    const a = at(t), b = at(t + 1), c = at(t + 2);
+    if (target === 'face') out.push(a.clone().add(b).add(c).divideScalar(3));
+    else out.push(a.clone().add(b).multiplyScalar(0.5), b.clone().add(c).multiplyScalar(0.5), c.clone().add(a).multiplyScalar(0.5));
+  }
+  return out;
+}
+function nearestVertex(x, y, exclude = [], target = SNAP_ELEMENTS.includes(precision.snapTarget) ? precision.snapTarget : 'vertex') {
+  let best = null, bestD = 18;
   content.traverse((o) => {
-    if (!o.isMesh || o.userData.proxy || exclude.some((e) => e === o || e.getObjectById?.(o.id))) return;
-    const p = o.geometry.attributes.position; if (!p || p.count > 60000) return;
+    if (!o.isMesh || o.userData.proxy || o.userData.editHelper || exclude.some((e) => e === o || e.getObjectById?.(o.id))) return;
     o.updateMatrixWorld();
-    for (let i = 0; i < p.count; i++) {
-      v.fromBufferAttribute(p, i).applyMatrix4(o.matrixWorld);
-      const s = toScreen(v); const d = Math.hypot(s.x - x, s.y - y);
-      if (d < bestD) { bestD = d; best = v.clone(); }
+    for (const v of candidates(o, target)) {
+      v.applyMatrix4(o.matrixWorld); const s = toScreen(v); const d = Math.hypot(s.x - x, s.y - y);
+      if (d < bestD) { bestD = d; best = v; }
     }
   });
   return best;
 }
+
+// ---------- Unidades de exibição (o app guarda tudo em metros) ----------
+export const UNITS = { m: 1, cm: 100, mm: 1000, in: 39.3701 };
+export const toUnit = (m) => m * (UNITS[precision.unit] || 1);
+export const fromUnit = (v) => v / (UNITS[precision.unit] || 1);
+const fmtU = (m, d = precision.decimals) => fmt(toUnit(m), d);
 
 // ---------- Transformação modal ----------
 let modal = null;
@@ -123,21 +141,21 @@ function update() {
 
   if (m.kind === 'move') {
     let d;
-    if (typedVal !== null) d = (axisDir || AXES.x).clone().multiplyScalar(typedVal);
+    if (typedVal !== null) d = (axisDir || AXES.x).clone().multiplyScalar(fromUnit(typedVal)); // valor digitado na unidade escolhida
     else {
       const hit = rayAt(m.mouse.x, m.mouse.y).intersectPlane(m.plane, new THREE.Vector3()) || m.planeHit0;
       d = hit.sub(m.planeHit0);
-      if (snapOn && precision.snapTarget === 'vertex') {
+      if (snapOn && SNAP_ELEMENTS.includes(precision.snapTarget)) {
         const v = nearestVertex(m.mouse.x, m.mouse.y, m.targets || []); if (v) d = v.sub(m.pivot);
       } else if (snapOn) {
-        const st = precision.snapTarget === 'grid' ? 1 : precision.moveStep;
+        const st = precision.snapTarget === 'grid' ? precision.gridSize : precision.moveStep;
         if (precision.snapTarget === 'grid') { const tgt = m.pivot.clone().add(d); tgt.set(Math.round(tgt.x / st) * st, Math.round(tgt.y / st) * st, Math.round(tgt.z / st) * st); d = tgt.sub(m.pivot); }
         else d.set(Math.round(d.x / st) * st, Math.round(d.y / st) * st, Math.round(d.z / st) * st);
       }
       if (axisDir) d = axisDir.clone().multiplyScalar(d.dot(axisDir));
     }
     T.makeTranslation(d.x, d.y, d.z);
-    label = `${icon('move')} Mover ${m.axis ? `<b style="color:${AXIS_COLOR[m.axis]}">${m.axis.toUpperCase()}</b>` : ''} ${fmt(d.x)} · ${fmt(d.y)} · ${fmt(d.z)} ${precision.unit} <span>· distância ${fmt(d.length())} ${precision.unit}</span>`;
+    label = `${icon('move')} Mover ${m.axis ? `<b style="color:${AXIS_COLOR[m.axis]}">${m.axis.toUpperCase()}</b>` : ''} ${fmtU(d.x)} · ${fmtU(d.y)} · ${fmtU(d.z)} ${precision.unit} <span>· distância ${fmtU(d.length())} ${precision.unit}</span>`;
   } else if (m.kind === 'rotate') {
     const ps = toScreen(m.pivot);
     let ang = typedVal !== null ? THREE.MathUtils.degToRad(typedVal)
@@ -206,7 +224,7 @@ export function initPrecision() {
 export function setCursorAt(x, y) {
   const hit = pickAt(x, y).find((h) => !h.object.userData.noPick && !h.object.userData.proxy);
   const p = hit ? hit.point : rayAt(x, y).intersectPlane(new THREE.Plane(new THREE.Vector3(0, 1, 0), 0), new THREE.Vector3());
-  if (p) { const snap = precision.snap && precision.snapTarget === 'vertex' ? nearestVertex(x, y) : null; cursor3D.copy(snap || p); bus.emit('cursor3d', cursor3D); if (precision.pivot === 'cursor') placePivot(); }
+  if (p) { const snap = precision.snap && SNAP_ELEMENTS.includes(precision.snapTarget) ? nearestVertex(x, y) : null; cursor3D.copy(snap || p); bus.emit('cursor3d', cursor3D); if (precision.pivot === 'cursor') placePivot(); }
 }
 export function cursorToSelection() { if (!state.selection.length) return; const c = new THREE.Vector3(); state.selection.forEach((o) => c.add(o.getWorldPosition(new THREE.Vector3()))); cursor3D.copy(c.divideScalar(state.selection.length)); bus.emit('cursor3d', cursor3D); }
 export function cursorToOrigin() { cursor3D.set(0, 0, 0); bus.emit('cursor3d', cursor3D); }
@@ -227,7 +245,7 @@ function initMeasure() {
     if (!measures.length && !pending) { labelsEl.innerHTML = ''; return; }
     const r = renderer.domElement.getBoundingClientRect(); const vr = labelsEl.parentElement.getBoundingClientRect();
     labelsEl.innerHTML = measures.map((m) => { const mid = toScreen(m.a.clone().add(m.b).multiplyScalar(0.5)); const d = m.a.distanceTo(m.b);
-      return `<span style="left:${mid.x - vr.left}px;top:${mid.y - vr.top}px">${fmt(d)} ${precision.unit}<small>Δ ${fmt(m.b.x - m.a.x, 2)} · ${fmt(m.b.y - m.a.y, 2)} · ${fmt(m.b.z - m.a.z, 2)}</small></span>`; }).join('');
+      return `<span style="left:${mid.x - vr.left}px;top:${mid.y - vr.top}px">${fmtU(d)} ${precision.unit}<small>Δ ${fmtU(m.b.x - m.a.x, 2)} · ${fmtU(m.b.y - m.a.y, 2)} · ${fmtU(m.b.z - m.a.z, 2)}</small></span>`; }).join('');
     void r;
   };
   tick();

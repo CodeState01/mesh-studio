@@ -6,6 +6,10 @@ const P = (id, name, baseURL, model, extra = {}) => ({ id, name, baseURL, model,
 const L = (id, name, baseURL, model = '') => P(id, name, baseURL, model, { local: true, keyOptional: true });
 
 export const PROVIDERS = [
+  // ---- Suas contas (assinatura) — sem chave de API, via ferramentas oficiais + MCP do Mesh ----
+  { id: 'acct-gemini', name: 'Gemini (sua conta Google)', format: 'account', cli: 'gemini', account: true, keyOptional: true, local: false, model: '' },
+  { id: 'acct-claude', name: 'Claude (sua conta Pro/Max)', format: 'account', cli: 'claude', account: true, keyOptional: true, local: false, model: '' },
+  { id: 'acct-chatgpt', name: 'ChatGPT (sua conta Plus/Pro)', format: 'account', cli: 'codex', account: true, keyOptional: true, local: false, model: '' },
   // ---- Nuvem: grandes laboratórios ----
   P('anthropic', 'Anthropic', 'https://api.anthropic.com/v1', 'claude-sonnet-5-5', { format: 'anthropic' }),
   P('openai', 'OpenAI', 'https://api.openai.com/v1', 'gpt-4.1'),

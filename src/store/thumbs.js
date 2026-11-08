@@ -50,7 +50,7 @@ async function render(job) {
 function waveform(data) {
   const c = document.createElement('canvas'); c.width = SIZE; c.height = SIZE; const g = c.getContext('2d');
   g.fillStyle = '#16171b'; g.fillRect(0, 0, SIZE, SIZE);
-  const accent = getComputedStyle(document.documentElement).getPropertyValue('--accent').trim() || '#e2703f';
+  const accent = getComputedStyle(document.documentElement).getPropertyValue('--accent').trim() || '#b9f23c';
   const bars = 64, step = Math.floor(data.length / bars); const mid = SIZE / 2;
   let peak = 0.0001; for (let i = 0; i < data.length; i++) peak = Math.max(peak, Math.abs(data[i]));
   for (let b = 0; b < bars; b++) {

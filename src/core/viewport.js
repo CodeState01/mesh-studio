@@ -66,7 +66,8 @@ export function initViewport(el) {
   // Navegação: botão do meio orbita, Shift+meio pan, roda zoom, Alt+esquerdo orbita.
   orbit = new OrbitControls(camera, renderer.domElement);
   orbit.enableDamping = true; orbit.dampingFactor = 0.12;
-  orbit.mouseButtons = { LEFT: null, MIDDLE: THREE.MOUSE.ROTATE, RIGHT: THREE.MOUSE.PAN };
+  // Botão direito fica livre para a câmera de voo (WASD); pan = Shift+meio.
+  orbit.mouseButtons = { LEFT: null, MIDDLE: THREE.MOUSE.ROTATE, RIGHT: null };
   orbit.target.set(0, 0.5, 0);
   renderer.domElement.addEventListener('pointerdown', (e) => {
     orbit.mouseButtons.LEFT = e.altKey ? THREE.MOUSE.ROTATE : null;
@@ -214,6 +215,7 @@ function applyPrecision() {
   gizmo.setRotationSnap(on ? THREE.MathUtils.degToRad(precision.rotateStep) : null);
   gizmo.setScaleSnap(on ? precision.scaleStep : null);
   gizmo.space = precision.orientation === 'local' ? 'local' : 'world';
+  const grid = helpers.getObjectByName('__grid__'); if (grid) grid.scale.setScalar(precision.gridSize * 2); // linha fina = tamanho da grade
   if (state.mode === 'object') placePivot();
 }
 

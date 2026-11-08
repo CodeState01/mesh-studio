@@ -20,7 +20,7 @@ const MORE = [
 export function renderHome(el) {
   const go = (p) => `data-go="${p}"`;
   el.innerHTML = `<div class="page-wrap home">
-    <section class="hero">${LOGO(56)}<div><h1>Bem-vindo ao Argila</h1><p>Crie em 3D do seu jeito — com as mãos ou pedindo para a IA.</p></div>
+    <section class="hero">${LOGO(56)}<div><h1>Bem-vindo ao Mesh</h1><p>Crie em 3D do seu jeito — com as mãos ou pedindo para a IA.</p></div>
       <div class="hero-actions"><button class="btn primary" ${go('model')}>${icon('plus', 15)} Começar a criar</button><button class="btn" data-cmd="open">${icon('folder', 15)} Abrir projeto</button><button class="btn" data-cmd="restore">Recuperar autosave</button></div></section>
     <h2>O que você quer fazer?</h2>
     <div class="start-grid">${START.map(([p, ic, t, d], i) => `<button class="start" ${go(p)} style="animation-delay:${i * 40}ms"><span class="start-ic">${icon(ic, 22)}</span><b>${t}</b><small>${d}</small></button>`).join('')}</div>
